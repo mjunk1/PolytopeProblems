@@ -1,8 +1,10 @@
 #include <iostream>
 #include <glpk.h>
 #include <fstream>
-#include <cmath>
 #include <tclap/CmdLine.h>
+#include "utilities.h"
+#include "channels.h"
+
 using namespace std;
 
 /* input to the program:
@@ -31,88 +33,6 @@ using namespace std;
 		- sparsity
 */
 
-int get_number_of_lines(string filename) {
-	int n=0;
-	string line;
-	fstream fin(filename, ios::in);
-	if(fin.is_open()) 
-		while(getline(fin, line))
-			++n;
-	fin.close();
-	return n;
-}
-
-int noisyT_1Q(double p, double *y) {
-	y[1] = 1 - (4.*p)/3.;
-	y[2] = 0;
-	y[3] = 0; 
-	y[4] = 0; 
-	y[5] = (1 - p)/sqrt(2) - p/(3.*sqrt(2));
-	y[6] = -((1 - p)/sqrt(2)) + p/(3.*sqrt(2));
-	y[7] = 0;
-	y[8] = (1 - p)/sqrt(2) - p/(3.*sqrt(2));
-	y[9] = (1 - p)/sqrt(2) - p/(3.*sqrt(2));
-}
-
-int noisyT_1Q(double *p, double *y) {
-	y[1] = p[1] - p[2] - p[3] + p[4];
-	y[2] = y[3] = y[4] = 0;
-	y[5] = p[1]/sqrt(2) + p[2]/sqrt(2) - p[3]/sqrt(2) - p[4]/sqrt(2);
-	y[6] = -(p[1]/sqrt(2)) + p[2]/sqrt(2) - p[3]/sqrt(2) + p[4]/sqrt(2);
-	y[7] = 0;
-	y[8] = p[1]/sqrt(2) + p[2]/sqrt(2) - p[3]/sqrt(2) - p[4]/sqrt(2);
-	y[9] = p[1]/sqrt(2) - p[2]/sqrt(2) + p[3]/sqrt(2) - p[4]/sqrt(2);
-}
-
-int noisyT_2Q(double p, double *y) {
-	vector<double> ytemp = {pow(1 - p,2) - pow(p,2)/9.,0,0,0,0,(-2*(1 - p)*p)/(3.*sqrt(3)) + (2*pow(p,2))/(9.*sqrt(3)),
-   0,0,0,0,(2*sqrt(0.6666666666666666)*(1 - p)*p)/3. - (2*sqrt(0.6666666666666666)*pow(p,2))/9.,0,0,
-   0,0,0,pow(1 - p,2) - pow(p,2)/9.,0,0,0,0,0,0,0,0,0,(2*(1 - p)*p)/3. - (2*pow(p,2))/9.,0,0,0,0,
-   0,pow(1 - p,2)/sqrt(2) - pow(p,2)/(9.*sqrt(2)),0,0,0,0,
-   (sqrt(2)*(1 - p)*p)/3. - (sqrt(2)*pow(p,2))/9.,
-   -(pow(1 - p,2)/sqrt(2)) + pow(p,2)/(9.*sqrt(2)),0,0,0,0,
-   -(sqrt(2)*(1 - p)*p)/3. + (sqrt(2)*pow(p,2))/9.,0,0,0,0,
-   pow(1 - p,2)/sqrt(2) - (sqrt(2)*(1 - p)*p)/3. + pow(p,2)/(9.*sqrt(2)),0,0,0,0,0,0,0,0,
-   -(pow(1 - p,2)/sqrt(2)) + (sqrt(2)*(1 - p)*p)/3. - pow(p,2)/(9.*sqrt(2)),0,0,0,0,0,0,
-   pow(1 - p,2) - pow(p,2)/9.,0,0,0,0,0,0,0,0,0,(2*(1 - p)*p)/3. - (2*pow(p,2))/9.,
-   (-2*(1 - p)*p)/(3.*sqrt(3)) + (2*pow(p,2))/(9.*sqrt(3)),0,0,0,0,
-   pow(1 - p,2) + (4*(1 - p)*p)/9. - (7*pow(p,2))/27.,0,0,0,0,
-   (2*sqrt(2)*(1 - p)*p)/9. - (2*sqrt(2)*pow(p,2))/27.,0,0,0,0,0,0,0,0,0,0,
-   pow(1 - p,2)/sqrt(2) - (sqrt(2)*(1 - p)*p)/3. + pow(p,2)/(9.*sqrt(2)),0,0,
-   -(pow(1 - p,2)/sqrt(2)) + (sqrt(2)*(1 - p)*p)/3. - pow(p,2)/(9.*sqrt(2)),0,0,0,0,0,0,0,
-   (sqrt(2)*(1 - p)*p)/3. - (sqrt(2)*pow(p,2))/9.,0,0,0,0,
-   pow(1 - p,2)/sqrt(2) - pow(p,2)/(9.*sqrt(2)),-(sqrt(2)*(1 - p)*p)/3. + (sqrt(2)*pow(p,2))/9.,
-   0,0,0,0,-(pow(1 - p,2)/sqrt(2)) + pow(p,2)/(9.*sqrt(2)),0,0,0,
-   pow(1 - p,2)/sqrt(2) - pow(p,2)/(9.*sqrt(2)),0,0,0,0,
-   (sqrt(2)*(1 - p)*p)/3. - (sqrt(2)*pow(p,2))/9.,pow(1 - p,2)/sqrt(2) - pow(p,2)/(9.*sqrt(2)),0,
-   0,0,0,(sqrt(2)*(1 - p)*p)/3. - (sqrt(2)*pow(p,2))/9.,0,0,0,0,0,0,0,
-   pow(1 - p,2)/sqrt(2) - (sqrt(2)*(1 - p)*p)/3. + pow(p,2)/(9.*sqrt(2)),0,0,
-   pow(1 - p,2)/sqrt(2) - (sqrt(2)*(1 - p)*p)/3. + pow(p,2)/(9.*sqrt(2)),0,0,0,0,0,
-   (2*sqrt(0.6666666666666666)*(1 - p)*p)/3. - (2*sqrt(0.6666666666666666)*pow(p,2))/9.,0,0,0,0,
-   (2*sqrt(2)*(1 - p)*p)/9. - (2*sqrt(2)*pow(p,2))/27.,0,0,0,0,
-   pow(1 - p,2) + (2*(1 - p)*p)/9. - (5*pow(p,2))/27.,0,0,0,0,0,
-   (2*(1 - p)*p)/3. - (2*pow(p,2))/9.,0,0,0,0,0,0,0,0,0,pow(1 - p,2) - pow(p,2)/9.,0,0,0,0,0,0,
-   pow(1 - p,2)/sqrt(2) - (sqrt(2)*(1 - p)*p)/3. + pow(p,2)/(9.*sqrt(2)),0,0,0,0,0,0,0,0,
-   pow(1 - p,2)/sqrt(2) - (sqrt(2)*(1 - p)*p)/3. + pow(p,2)/(9.*sqrt(2)),0,0,0,0,
-   (sqrt(2)*(1 - p)*p)/3. - (sqrt(2)*pow(p,2))/9.,0,0,0,0,
-   pow(1 - p,2)/sqrt(2) - pow(p,2)/(9.*sqrt(2)),(sqrt(2)*(1 - p)*p)/3. - (sqrt(2)*pow(p,2))/9.,0,
-   0,0,0,pow(1 - p,2)/sqrt(2) - pow(p,2)/(9.*sqrt(2)),0,0,0,0,0,
-   (2*(1 - p)*p)/3. - (2*pow(p,2))/9.,0,0,0,0,0,0,0,0,0,pow(1 - p,2) - pow(p,2)/9.};
-
-   copy(ytemp.begin(), ytemp.end(), y+1);
-
-   return 0;
-}
-
-int convolve_mod2(double *a, double *b, double *c, int n) {
-	for(int i=0; i<n; i++) {
-		c[i] = 0;
-		for(int j=0; j<n; j++) {
-			c[i] += a[j] * b[i^j];
-		} 
-	}
-	return 0;
-}
 
 
 int main(int argc, char** argv) {
@@ -191,7 +111,7 @@ y[dimension+1] = -1.;
 glp_set_prob_name(lp, "Polytope membership");
 glp_set_obj_dir(lp, GLP_MAX);
 
-char s[5];
+char s[50];
 
 // setting up rows
 glp_add_rows(lp, number_of_vertices+1);
@@ -250,13 +170,31 @@ if(!fin.is_open()) {
 	return 1;
 }
 
-for(double p=0.1; p<=0.1; p+=0.01) {
+// probability vectors
+double *pvec = new double[(int)pow(4,number_of_qubits)];
+double *pvecsqr = new double[(int)pow(4,number_of_qubits)];
 
+for(double p=0; p<=1.01; p+=0.01) {
+	cout << "Starting optimization for noise strength p = " << p << endl;
+	cout << "---------------------------------------------------" << endl << endl;
+
+	// init pvec
+	if(number_of_qubits == 1) {
+		dn_pdist_1Q(p, pvec);
+	}
+
+	if(number_of_qubits == 2) {
+		dn_pdist_2Q(p, pvec);
+	}
+	
 	// compute y
 	if(number_of_qubits == 1)
-		noisyT_1Q(p, y);
-	else
-		noisyT_2Q(p, y);
+		noisyT_1Q(pvec, y);
+	else {
+		// test convolution
+		convolve_mod2(pvec, pvec, pvecsqr, number_of_qubits);
+		noisyT_2Q(pvecsqr, y);
+	}
 
 	// replacing the last row of the constraint matrix
 	glp_set_mat_row(lp, number_of_vertices+1, dimension+1, ind, y);
@@ -271,6 +209,9 @@ for(double p=0.1; p<=0.1; p+=0.01) {
 	// write output
 	glp_print_sol(lp, (output_prefix + to_string(p) + ".dat").c_str());
 	fin << p << " " << glp_get_obj_val(lp) << endl;
+
+	cout << endl;
+	cout << "---------------------------------------------------" << endl << endl;
 }
 
 fin.close();
@@ -279,6 +220,8 @@ fin.close();
 delete[] ia, ja, a;
 delete[] y;
 delete[] ind;
+delete[] pvec;
+delete[] pvecsqr;
 glp_delete_prob(lp);
 
 }
