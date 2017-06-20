@@ -4,6 +4,10 @@
 #include <tclap/CmdLine.h>
 #include "utilities.h"
 
+#ifndef POLYTOPEPROGRAM_H
+#include "PolytopeProgram.h"
+#endif
+
 using namespace std;
 
 /* input to the program:
@@ -171,9 +175,17 @@ if(!fin.is_open()) {
 
 // probability vectors
 double *pvec = new double[(int)pow(4,number_of_qubits)];
-double *pvecsqr = new double[(int)pow(4,number_of_qubits)];
+double *pvec2 = new double[(int)pow(4,number_of_qubits)];
+double *pvec3 = new double[(int)pow(4,number_of_qubits)];
 
-for(double p=0; p<=1.01; p+=0.01) {
+// symplectic representations of some channels
+unsigned H1[4] = { 0b1010, 0b0101, 0b0010, 0b0001 };
+unsigned S1[4] = { 0b0010, 0b0001, 0b1000, 0b0100 };
+unsigned H2[4] = { 0b1100, 0b0100, 0b0011, 0b0001 };
+unsigned S2[4] = { 0b0100, 0b1000, 0b0001, 0b0010 };
+unsigned CNOT[4] = { 0b1100, 0b0100, 0b0010, 0b0011 };
+
+for(double p=0; p<=0.01; p+=0.01) {
 	cout << "Starting optimization for noise strength p = " << p << endl;
 	cout << "---------------------------------------------------" << endl << endl;
 
@@ -191,8 +203,12 @@ for(double p=0; p<=1.01; p+=0.01) {
 		noisyT_1Q(pvec, y);
 	else {
 		// test convolution
-		convolve_mod2(pvec, pvec, pvecsqr, 2*number_of_qubits);
-		noisyT_2Q(pvecsqr, y);
+		//convolve_mod2(pvec, pvec, pvecsqr, 2*number_of_qubits);
+		// test some gates
+		symplectic_transform(pvec, pvec2, H1, number_of_qubits);
+		convolve_mod2(pvec2, pvec, pvec3, 2*number_of_qubits);
+		write_pdist((output_prefix + to_string(p) + "_dist.dat"), pvec3, number_of_qubits);
+		noisyT_2Q(pvec3, y);
 	}
 
 	// replacing the last row of the constraint matrix
@@ -220,7 +236,8 @@ delete[] ia, ja, a;
 delete[] y;
 delete[] ind;
 delete[] pvec;
-delete[] pvecsqr;
+delete[] pvec2;
+delete[] pvec3;
 glp_delete_prob(lp);
 
 }
