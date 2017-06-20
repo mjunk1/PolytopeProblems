@@ -3,7 +3,6 @@
 #include <fstream>
 #include <tclap/CmdLine.h>
 #include "utilities.h"
-#include "channels.h"
 
 using namespace std;
 
@@ -192,7 +191,7 @@ for(double p=0; p<=1.01; p+=0.01) {
 		noisyT_1Q(pvec, y);
 	else {
 		// test convolution
-		convolve_mod2(pvec, pvec, pvecsqr, number_of_qubits);
+		convolve_mod2(pvec, pvec, pvecsqr, 2*number_of_qubits);
 		noisyT_2Q(pvecsqr, y);
 	}
 
