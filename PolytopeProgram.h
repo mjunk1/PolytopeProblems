@@ -44,8 +44,7 @@ public:
 
 		// some helper stuff
 		_ind = new int[_dim+2];
-		_ind[0] = 0;
-		for(int i=1; i<=_dim+1; i++)
+		for(int i=0; i<=_dim+1; i++)
 			_ind[i] = i;
 
 		// reading vertex coordinates
@@ -153,6 +152,14 @@ public:
 
 	void write_sol(string outfile) {
 		glp_print_sol(_lp, outfile.c_str());
+	}
+
+	double get_result() {
+		return glp_get_obj_val(_lp);
+	}
+
+	int get_status() {
+		return glp_get_status(_lp);
 	}
 };
 
