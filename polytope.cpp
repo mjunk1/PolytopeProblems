@@ -31,6 +31,15 @@ using namespace std;
 	(5) restart at (2)
 */
 
+
+/* To do:
+----------------
+	(1) Write a method to directly find the threshold. This could be done using an interval division method.
+	(2) ...
+
+*/
+
+
 int main(int argc, char** argv) {
 
 // ----- parse comand-line parameters

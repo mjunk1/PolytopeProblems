@@ -20,7 +20,6 @@ using namespace std;
 */
 
 
-
 // ----- indexing routines
 
 /* Computes the multi index for a given linear index assuming row-major order 
