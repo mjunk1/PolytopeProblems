@@ -42,14 +42,17 @@ using namespace std;
 
 int main(int argc, char** argv) {
 
+// ----------------------------------
 // ----- parse comand-line parameters
+// ----------------------------------
+
 unsigned number_of_qubits;
 string cmatrix_file;
 string output_prefix;
 vector<string> circuit;
 unsigned circuit_length;
 double cnot_prob;
-double nlower, nupper, ndelta;
+double nlower, nupper, eps;
 unsigned niter;
 
 try {
@@ -83,8 +86,8 @@ try {
 	TCLAP::ValueArg<double> cnum2_arg ("N","Noise", "Upper bound for the noise", false, 1.0, "Positive number between 0 and 1");
 	cmd.add(cnum2_arg);
 
-	TCLAP::ValueArg<double> cnumd_arg ("d","Delta", "Delta / stepsize for noise strength", false, 0.01, "Positive number between 0 and 1");
-	cmd.add(cnumd_arg);
+	TCLAP::ValueArg<double> eps_arg ("e","Error", "Error for the convergence of the noise threshold", false, 1e-5, "Positive number");
+	cmd.add(eps_arg);
 
 	TCLAP::ValueArg<unsigned> citer_arg ("i", "iterations", "Number of circuits the generate", false, 10, "Positive integer");
 	cmd.add(citer_arg);
@@ -100,7 +103,7 @@ try {
 	nlower = cnum1_arg.getValue();
 	nupper = cnum2_arg.getValue();
 	niter = citer_arg.getValue();
-	ndelta = cnumd_arg.getValue();
+	eps = eps_arg.getValue();
 
 	if(circuit.size() != 0) {
 		circuit_length = circuit.size();
@@ -127,8 +130,8 @@ try {
 		return 1;
 	}
 
-	if(nupper - nlower < ndelta) {
-		cerr << "Error: Stepsize for noise strength is greater than the specified interval." << endl;
+	if(eps <= 0) {
+		cerr << "Error: Convergence error is less than or equal to 0." << endl;
 		return 1;
 	}
 
@@ -146,13 +149,14 @@ else
 	number_of_vertices = 11520;
 
 
-
-// ----- start computation
+// ----------------------------------
+// ----- prepare computation
+// ----------------------------------
 
 PolytopeProgram lp (number_of_vertices, dimension, cmatrix_file);
 int ret_status;
 string out;
-fstream fout,fout2;
+fstream fout,foutd,foutc;
 
 // probability vectors
 double *dn = new double[len];
@@ -189,9 +193,29 @@ random_device rd;
 mt19937 rd_gen(rd()); 
 discrete_distribution<> rd_dist( { hs_prob, hs_prob, hs_prob, hs_prob, cnot_prob } ); 
 
-// --- circuit loop
 
+// for every circuit, the threshold is saved to this file
+out = output_prefix + "_" + to_string(circuit_length);
+foutc.open(out + ".dat", ios::out);
+if(!foutc.is_open()) {
+	cerr << "Couldn't open output file " << out + ".dat" << " . Will now hold." << endl;
+	return 1;
+}
+
+// initialize variables for interval division method
+double p1l, p1r, p0m, p1m;
+unsigned max_iter = 50;
+unsigned iter_counter = 0;
+
+
+// ----------------------------------
+// ------ start computation
+// ----------------------------------
+
+// circuit loop
 for(unsigned c=0; c < niter; c++) {
+
+	// --- generate circuit
 
 	if(circuit.size() != 0) {
 		// this means an explicit circuit has been set
@@ -199,7 +223,7 @@ for(unsigned c=0; c < niter; c++) {
 			gate_order.at(i) = gate_id[circuit.at(i)];
 
 	} else {
-		// generate a circuit of given length
+		// generate a random circuit of given length
 		cout << "Generating circuit of length " << circuit_length << endl;
 		cout << "---------------------------------------------------" << endl << endl;
 
@@ -208,42 +232,60 @@ for(unsigned c=0; c < niter; c++) {
 	}
 
 
-	// --- noise strength loop
+	// --- prepare output files
 
 	// the order of gates serves as identifier for the output file
-	out = output_prefix;
-	for(unsigned i : gate_order) {
+	out = output_prefix + "_";
+	for(unsigned i : gate_order)
 		out += to_string(i);
-		fout << i << " ";
-	}
-	fout << endl;
 
 	cout << "Circuit file: " << out << endl << endl;
 
 	// we will write the optimal value of the objective function for every value of the noise strength to this file
-	fout.open(out + "_obj.dat", ios::out);
+	fout.open(out + "_out.dat", ios::out);
 	if(!fout.is_open()) {
-		cerr << "Couldn't open output file " << out + "_obj.dat" << " . Will now hold." << endl;
+		cerr << "Couldn't open output file " << out + "_out.dat" << " . Will now hold." << endl;
 		return 1;
 	}
 
-	fout2.open(out + "_fdist.dat", ios::out);
-	if(!fout2.is_open()) {
+	foutd.open(out + "_fdist.dat", ios::out);
+	if(!foutd.is_open()) {
 		cerr << "Couldn't open output file " << out + "_fdist.dat" << " . Will now hold." << endl;
 		return 1;
 	}
 
-	for(double p=nlower; p<=nupper; p+=ndelta) {
-		cout << "Starting optimization for noise strength p = " << p << endl;
+	// write the circuit identifier to the files
+	for(unsigned i : gate_order) {
+		foutd << i << " ";
+		foutc << i << " ";
+		fout << i << " ";
+	}
+	fout << endl;
+	foutd << endl;
+
+
+	// --- find the noise threshold via interval division method
+
+	// reset interval variables
+	p1r = nupper;
+	p1l = nlower;
+	p0m = 0;
+	p1m = fabs(nupper + nlower)/2.;
+	iter_counter = 0;
+
+	// loop until desired accuracy is reached
+	while( fabs(p1m-p0m) > eps && iter_counter < max_iter ) {
+
+		cout << "Starting optimization for noise strength p = " << p1m << endl;
 		cout << "---------------------------------------------------" << endl << endl;
 
 		// init pvec
 		if(number_of_qubits == 1) {
-			dn_pdist_1Q(p, dn);
+			dn_pdist_1Q(p1m, dn);
 			noisyT_1Q(dn, y);
 		}
 		else if(number_of_qubits == 2) {
-			dn_pdist_2Q(p, dn);
+			dn_pdist_2Q(p1m, dn);
 			copy(dn, dn+len, pdist0);
 
 			// write_pdist(out + "_" + to_string(p) + "_dist.dat", pdist0, number_of_qubits);
@@ -254,10 +296,10 @@ for(unsigned c=0; c < niter; c++) {
 				convolve_mod2(pdist1, dn, pdist0, 2*number_of_qubits);
 			}
 
-			fout2 << "Final distribution for p = " << p << endl;
-			write_pdist(fout2, pdist0, number_of_qubits);
+			foutd << "Final distribution for p = " << p1m << endl;
+			write_pdist(foutd, pdist0, number_of_qubits);
 
-			// compute adjoint representation of the foutal channel
+			// compute adjoint representation of the final channel
 			noisyT_2Q(pdist0, y);
 		}
 		else {
@@ -268,18 +310,48 @@ for(unsigned c=0; c < niter; c++) {
 		// solve & write solution
 		ret_status = lp.check_point(y);
 		//lp.write_sol(output_prefix + to_string(p) + ".dat");
-		fout << p << " " << lp.get_result() << " " << ret_status << " " << lp.get_status() << endl;
+		fout << p1m << " " << lp.get_result() << " " << ret_status << " " << lp.get_status() << endl;
 
 		cout << endl;
 		cout << "---------------------------------------------------" << endl << endl;
+
+		if(lp.get_result() > 0) {
+			// left of the optimal value
+			// cout << "left" << endl;
+
+			// set new interval
+			p1l = p1m;
+			p0m = p1m;
+			p1m = fabs(p1r + p1l)/2.;
+
+			// cout << p1l << " " << p1r << " " << p1m << endl;
+
+		} else {
+			// right of the optimal value
+			// cout << "right" << endl;
+
+			// set new interval
+			p1r = p1m;
+			p0m = p1m;
+			p1m = fabs(p1r + p1l)/2.;
+		}
+
+		++iter_counter;
 	}
 
+	if(iter_counter == max_iter) {
+		cout << "Maximum number of iterations reached (max = " << max_iter << ")" << endl;
+	}
+
+	foutc << p1m << " " << iter_counter << endl;
+
 	fout.close();
-	fout2.close();
+	foutd.close();
 
 }
 // --- end of circuit loop
 
+foutc.close();
 
 // ------ free stuff
 delete[] y;

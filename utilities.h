@@ -98,7 +98,7 @@ unsigned get_number_of_lines(string filename) {
 	unsigned n=0;
 	string line;
 	fstream fin(filename, ios::in);
-	if(fin.is_open()) 
+	if(fin.is_open())
 		while(getline(fin, line))
 			++n;
 	fin.close();
@@ -128,27 +128,24 @@ int dn_pdist_1Q(double p, double *pdist) {
 
 // probability distribution of depolarizing noise on 2 qubits
 int dn_pdist_2Q(double p, double *pdist) {
-  unsigned i,j,n;
-
-  // i == 0, j == 0
-  pdist[0] = (1.-p)*(1.-p);
-
-  // i == 0, j > 0
-  for(j=1; j<4; j++) {
-    n = get_linear_index(2, 4, {0,j});
-    pdist[n] = (1.-p)*p/3.;
-  }   
-  for(i=1; i<4; i++) {
-    // i > 0, j == 0
-    n = get_linear_index(2, 4, {i,0});
-    pdist[n] = (1.-p)*p/3.;
-
-    // i,j > 0
-    for(j=1; j<4; j++) {
-      n = get_linear_index(2, 4, {i,j});
-      pdist[n] = p*p/9.;
-    }     
-  }
+	pdist[0] = pow(1 - p,2);
+	pdist[1] = ((1 - p)*p)/3.;
+	pdist[2] = ((1 - p)*p)/3.;
+	pdist[3] = ((1 - p)*p)/3.;
+	pdist[4] = ((1 - p)*p)/3.;
+	pdist[5] = pow(p,2)/9.;
+	pdist[6] = pow(p,2)/9.;
+	pdist[7] = pow(p,2)/9.;
+	pdist[8] = ((1 - p)*p)/3.;
+	pdist[9] = pow(p,2)/9.;
+	pdist[10] = pow(p,2)/9.;
+	pdist[11] = pow(p,2)/9.;
+	pdist[12] = ((1 - p)*p)/3.;
+	pdist[13] = pow(p,2)/9.;
+	pdist[14] = pow(p,2)/9.;
+	pdist[15] = pow(p,2)/9.;
+	
+	return 0;
 }
 
 // This is the convolution p3 = p1 * p2 in (Z_2)^n (addition mod 2)

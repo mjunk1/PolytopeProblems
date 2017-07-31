@@ -3,10 +3,13 @@
 #include <glpk.h>
 #include <fstream>
 #include <string>
+#include <cassert>
 
 #ifndef UTILITIES_H
 #include "utilities.h"
 #endif
+
+#define IPM
 
 using namespace std;
 
@@ -27,8 +30,11 @@ protected:
 
 	// GLPK variables
 	glp_prob *_lp = nullptr;
+	// glp_smcp _parm;
 	int _glp_ret = 0;
 	int *_ind;
+
+	string _method = "simplex";
 
 public:
 
@@ -48,7 +54,9 @@ public:
 			_ind[i] = i;
 
 		// reading vertex coordinates
-		read_vertex_matrix(cmatrix_file);
+		if(read_vertex_matrix(cmatrix_file))
+			exit (EXIT_FAILURE);
+		// set_pars();
 	}
 
 	// Destructor
@@ -86,6 +94,9 @@ public:
 		// ----- create GLPK problem 
 
 		_lp = glp_create_prob();
+
+		// set up some parameters
+
 
 		// set up problem parameters
 		glp_set_prob_name(_lp, "Polytope membership");
@@ -131,9 +142,23 @@ public:
 		delete[] c;
 
 		return 0;
-	} 
+	}
+
+	// void set_pars() {
+	// 	glp_init_smcp(&_parm);
+	// 	// _parm.it_lim = 20;
+	// 	_parm.presolve = GLP_ON;
+	// } 
+
+	void set_method(string s) {
+		_method = s;
+	}
 
 	int check_point(double *y) {
+		if(y == nullptr) {
+			cout << "Error: check_point() received a null pointer." << endl;
+			return -1;
+		}
 		// copying y
 		copy(y,y+_dim,_y+1);
 
@@ -144,8 +169,16 @@ public:
 		for(int j=1; j<=_dim+1; j++) 
 			glp_set_obj_coef(_lp, j, _y[j]);
 
+
+		// changes in the constraint matrix generally invalides the basis factorization
+		//if(glp_bf_exists(_lp) == 0)
+		//	glp_factorize(_lp);
+		
 		// solve
-		_glp_ret = glp_simplex(_lp, NULL);
+		if(_method == "simplex")
+			_glp_ret = glp_simplex(_lp, NULL);
+		else
+			_glp_ret = glp_interior(_lp, NULL);
 
 		return _glp_ret;
 	}
@@ -155,11 +188,17 @@ public:
 	}
 
 	double get_result() {
-		return glp_get_obj_val(_lp);
+		if(_method == "simplex")
+			return glp_get_obj_val(_lp);
+		else
+			return glp_ipt_obj_val(_lp);
 	}
 
 	int get_status() {
-		return glp_get_status(_lp);
+		if(_method == "simplex")
+			return glp_get_status(_lp);
+		else
+			return glp_ipt_status(_lp);
 	}
 };
 
