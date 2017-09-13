@@ -28,6 +28,37 @@ protected:
 	// coordinates of a point to check
 	double *_y = nullptr;
 
+public:
+
+	// Constructors
+	PolytopeProgram() { }
+
+	// Destructor
+	virtual ~PolytopeProgram() {
+		delete[] _ia, _ja, _a, _y;
+	}
+
+	// abstract methods
+
+	// reading & allocation method
+	virtual int read_vertex_matrix(string cmatrix_file) = 0; 
+
+	// membership checking method
+	virtual int check_point(double *y) = 0;
+
+	// write solution to outfile
+	virtual void write_sol(string outfile) = 0;
+
+	virtual double get_result() = 0;
+
+	virtual int get_status() = 0;
+};
+
+
+
+class GLPKPolytopeProgram : public PolytopeProgram {
+protected:
+
 	// GLPK variables
 	glp_prob *_lp = nullptr;
 	// glp_smcp _parm;
@@ -39,9 +70,12 @@ protected:
 public:
 
 	// Constructors
-	PolytopeProgram() { }
+	GLPKPolytopeProgram() { }
 
-	PolytopeProgram(unsigned nvertices, unsigned dimension, string cmatrix_file) : _nvertices(nvertices), _dim(dimension) {
+	GLPKPolytopeProgram(unsigned nvertices, unsigned dimension, string cmatrix_file) {
+
+		_nvertices = nvertices;
+		_dim = dimension;
 
 		// preparing coordinates of the point to check
 		_y = new double[_dim+2];
@@ -56,12 +90,11 @@ public:
 		// reading vertex coordinates
 		if(read_vertex_matrix(cmatrix_file))
 			exit (EXIT_FAILURE);
-		// set_pars();
 	}
 
 	// Destructor
-	~PolytopeProgram() {
-		delete[] _ia, _ja, _a, _y, _ind;
+	~GLPKPolytopeProgram() {
+		delete[] _ind;
 		glp_delete_prob(_lp);
 	}
 
@@ -144,12 +177,6 @@ public:
 		return 0;
 	}
 
-	// void set_pars() {
-	// 	glp_init_smcp(&_parm);
-	// 	// _parm.it_lim = 20;
-	// 	_parm.presolve = GLP_ON;
-	// } 
-
 	void set_method(string s) {
 		_method = s;
 	}
@@ -173,6 +200,7 @@ public:
 		// changes in the constraint matrix generally invalides the basis factorization
 		//if(glp_bf_exists(_lp) == 0)
 		//	glp_factorize(_lp);
+		glp_warm_up(_lp);
 		
 		// solve
 		if(_method == "simplex")
@@ -201,5 +229,9 @@ public:
 			return glp_ipt_status(_lp);
 	}
 };
+
+class SoPlexPolytopeProgram : public PolytopeProgram {
+	
+}
 
 #endif

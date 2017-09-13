@@ -54,6 +54,7 @@ unsigned circuit_length;
 double cnot_prob;
 double nlower, nupper, eps;
 unsigned niter;
+string method;
 
 try {
 
@@ -92,6 +93,11 @@ try {
 	TCLAP::ValueArg<unsigned> citer_arg ("i", "iterations", "Number of circuits the generate", false, 10, "Positive integer");
 	cmd.add(citer_arg);
 
+	vector<string> allowed2 = {"simplex", "interior_point"};
+	TCLAP::ValuesConstraint<string> constraint2(allowed2);
+	TCLAP::ValueArg<string> method_arg ("m","method", "LP solver to use", false, "simplex", &constraint2);
+	cmd.add(method_arg);
+
 	cmd.parse(argc, argv);
 
 	number_of_qubits = nqubits_arg.getValue();
@@ -104,6 +110,7 @@ try {
 	nupper = cnum2_arg.getValue();
 	niter = citer_arg.getValue();
 	eps = eps_arg.getValue();
+	method = method_arg.getValue();
 
 	if(circuit.size() != 0) {
 		circuit_length = circuit.size();
@@ -153,7 +160,8 @@ else
 // ----- prepare computation
 // ----------------------------------
 
-PolytopeProgram lp (number_of_vertices, dimension, cmatrix_file);
+GLPKPolytopeProgram lp (number_of_vertices, dimension, cmatrix_file);
+lp.set_method(method);
 int ret_status;
 string out;
 fstream fout,foutd,foutc;
