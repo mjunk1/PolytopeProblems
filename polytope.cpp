@@ -55,6 +55,7 @@ double cnot_prob;
 double nlower, nupper, eps;
 unsigned niter;
 string method;
+bool verbose;
 
 try {
 
@@ -87,11 +88,13 @@ try {
 	TCLAP::ValueArg<double> cnum2_arg ("N","Noise", "Upper bound for the noise", false, 1.0, "Positive number between 0 and 1");
 	cmd.add(cnum2_arg);
 
-	TCLAP::ValueArg<double> eps_arg ("e","Error", "Error for the convergence of the noise threshold", false, 1e-5, "Positive number");
+	TCLAP::ValueArg<double> eps_arg ("e","Error", "Error for the convergence of the noise threshold", false, 1e-6, "Positive number");
 	cmd.add(eps_arg);
 
 	TCLAP::ValueArg<unsigned> citer_arg ("i", "iterations", "Number of circuits the generate", false, 10, "Positive integer");
 	cmd.add(citer_arg);
+
+	TCLAP::SwitchArg verbose_arg ("v","verbose","Increase verbosity by writing more detailed information to files", cmd, false);
 
 	vector<string> allowed2 = {"simplex", "interior_point"};
 	TCLAP::ValuesConstraint<string> constraint2(allowed2);
@@ -111,6 +114,7 @@ try {
 	niter = citer_arg.getValue();
 	eps = eps_arg.getValue();
 	method = method_arg.getValue();
+	verbose = verbose_arg.getValue();
 
 	if(circuit.size() != 0) {
 		circuit_length = circuit.size();
@@ -146,14 +150,18 @@ try {
 	cerr << "Error: " << e.error() << " for arg " << e.argId() << endl; 
 }
 
-int dimension = pow(pow(2, 2*number_of_qubits)-1, 2);
+// int dimension = pow(pow(2, 2*number_of_qubits)-1, 2);
+int dimension = pow(4, number_of_qubits + 1) - 1; // ambient dimension of the embedded polytope
 int number_of_vertices;
-int len = pow(4,number_of_qubits);
+int len = pow(4,number_of_qubits); // number of points in phase space
 
-if(number_of_qubits == 1)
+if(number_of_qubits == 1) {
 	number_of_vertices = 24;
-else
-	number_of_vertices = 11520;
+}
+else {
+	//number_of_vertices = 11520;
+	number_of_vertices = 314;
+}
 
 
 // ----------------------------------
@@ -171,8 +179,8 @@ double *dn = new double[len];
 double *pdist0 = new double[len];
 double *pdist1 = new double[len];
 
-// coordinates of the noisy channel
-double *y = new double[dimension];
+// coordinates of the noisy channel (GLPK index convention: indices start at 1)
+double *y = new double[dimension+1];
 
 // --- randomized circuit generation 
 

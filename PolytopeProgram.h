@@ -230,8 +230,8 @@ public:
 	}
 };
 
-class SoPlexPolytopeProgram : public PolytopeProgram {
+// class SoPlexPolytopeProgram : public PolytopeProgram {
 	
-}
+// }
 
 #endif
