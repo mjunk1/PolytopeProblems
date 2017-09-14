@@ -187,7 +187,7 @@ public:
 			return -1;
 		}
 		// copying y
-		copy(y,y+_dim,_y+1);
+		copy(y,y+_dim+1,_y);
 
 		// replacing the last row of the constraint matrix
 		glp_set_mat_row(_lp, _nvertices+1, _dim+1, _ind, _y);

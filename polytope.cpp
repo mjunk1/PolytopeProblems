@@ -55,7 +55,11 @@ double cnot_prob;
 double nlower, nupper, eps;
 unsigned niter;
 string method;
-bool verbose;
+bool Quiet;
+
+int dimension; // = pow(4, number_of_qubits + 1) - 1; // ambient dimension of the embedded polytope
+int number_of_vertices; // = 314
+
 
 try {
 
@@ -94,7 +98,13 @@ try {
 	TCLAP::ValueArg<unsigned> citer_arg ("i", "iterations", "Number of circuits the generate", false, 10, "Positive integer");
 	cmd.add(citer_arg);
 
-	TCLAP::SwitchArg verbose_arg ("v","verbose","Increase verbosity by writing more detailed information to files", cmd, false);
+	TCLAP::ValueArg<int> vertices_arg ("v", "vertices", "Number of vertices of the polytope", true, 0, "Positive integer");
+	cmd.add(vertices_arg);
+
+	TCLAP::ValueArg<int> dim_arg ("d", "dimension", "Ambient dimension of the polytope", true, 0, "Positive integer");
+	cmd.add(dim_arg);
+
+	TCLAP::SwitchArg Quiet_arg ("Q","Quiet","Suppress detailed output to files", cmd, false);
 
 	vector<string> allowed2 = {"simplex", "interior_point"};
 	TCLAP::ValuesConstraint<string> constraint2(allowed2);
@@ -112,9 +122,11 @@ try {
 	nlower = cnum1_arg.getValue();
 	nupper = cnum2_arg.getValue();
 	niter = citer_arg.getValue();
+	number_of_vertices = vertices_arg.getValue();
+	dimension = dim_arg.getValue();
 	eps = eps_arg.getValue();
 	method = method_arg.getValue();
-	verbose = verbose_arg.getValue();
+	Quiet = Quiet_arg.getValue();
 
 	if(circuit.size() != 0) {
 		circuit_length = circuit.size();
@@ -144,25 +156,21 @@ try {
 	if(eps <= 0) {
 		cerr << "Error: Convergence error is less than or equal to 0." << endl;
 		return 1;
-	}
+	} 
+
+	if(number_of_vertices <= 0) {
+		cerr << "Error: Number of vertices is less than or equal to 0." << endl;
+		return 1;
+	} 
+
+	if(dimension <= 0) {
+		cerr << "Error: Dimension is less than or equal to 0." << endl;
+		return 1;
+	} 
 
 } catch (TCLAP::ArgException &e) { 
 	cerr << "Error: " << e.error() << " for arg " << e.argId() << endl; 
 }
-
-// int dimension = pow(pow(2, 2*number_of_qubits)-1, 2);
-int dimension = pow(4, number_of_qubits + 1) - 1; // ambient dimension of the embedded polytope
-int number_of_vertices;
-int len = pow(4,number_of_qubits); // number of points in phase space
-
-if(number_of_qubits == 1) {
-	number_of_vertices = 24;
-}
-else {
-	//number_of_vertices = 11520;
-	number_of_vertices = 314;
-}
-
 
 // ----------------------------------
 // ----- prepare computation
@@ -173,6 +181,7 @@ lp.set_method(method);
 int ret_status;
 string out;
 fstream fout,foutd,foutc;
+int len = pow(4,number_of_qubits); // number of points in phase space
 
 // probability vectors
 double *dn = new double[len];
@@ -258,7 +267,7 @@ for(unsigned c=0; c < niter; c++) {
 	cout << "Circuit file: " << out << endl << endl;
 
 	// we will write the optimal value of the objective function for every value of the noise strength to this file
-	if(verbose == true) {
+	if(Quiet == false) {
 		fout.open(out + "_out.dat", ios::out);
 		if(!fout.is_open()) {
 			cerr << "Couldn't open output file " << out + "_out.dat" << " . Will now hold." << endl;
@@ -275,12 +284,12 @@ for(unsigned c=0; c < niter; c++) {
 	// write the circuit identifier to the files
 	for(unsigned i : gate_order) {
 		foutc << i << " ";
-		if(verbose == true) {
+		if(Quiet == false) {
 			foutd << i << " ";
 			fout << i << " ";
 		}
 	}
-	if(verbose == true) {
+	if(Quiet == false) {
 		fout << endl;
 		foutd << endl;
 	}
@@ -318,12 +327,15 @@ for(unsigned c=0; c < niter; c++) {
 				convolve_mod2(pdist1, dn, pdist0, 2*number_of_qubits);
 			}
 
-			if(verbose == true) {
+			if(Quiet == false) {
 				foutd << "Final distribution for p = " << p1m << endl;
 				write_pdist(foutd, pdist0, number_of_qubits);
 			}
 
 			// compute adjoint representation of the final channel
+			//noisyT_2Q_adjoint(pdist0, y);
+
+			// compute matrix representation of the final channel
 			noisyT_2Q(pdist0, y);
 		}
 		else {
@@ -333,7 +345,7 @@ for(unsigned c=0; c < niter; c++) {
 		
 		// solve & write solution
 		ret_status = lp.check_point(y);
-		if(verbose == true) {
+		if(Quiet == false) {
 			//lp.write_sol(output_prefix + to_string(p) + ".dat");
 			fout << p1m << " " << lp.get_result() << " " << ret_status << " " << lp.get_status() << endl;
 		}
@@ -367,7 +379,7 @@ for(unsigned c=0; c < niter; c++) {
 
 	foutc << p1m << " " << iter_counter << endl;
 
-	if(verbose == true) {
+	if(Quiet == false) {
 		fout.close();
 		foutd.close();
 	}
