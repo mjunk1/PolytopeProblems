@@ -258,26 +258,32 @@ for(unsigned c=0; c < niter; c++) {
 	cout << "Circuit file: " << out << endl << endl;
 
 	// we will write the optimal value of the objective function for every value of the noise strength to this file
-	fout.open(out + "_out.dat", ios::out);
-	if(!fout.is_open()) {
-		cerr << "Couldn't open output file " << out + "_out.dat" << " . Will now hold." << endl;
-		return 1;
-	}
+	if(verbose == true) {
+		fout.open(out + "_out.dat", ios::out);
+		if(!fout.is_open()) {
+			cerr << "Couldn't open output file " << out + "_out.dat" << " . Will now hold." << endl;
+			return 1;
+		}
 
-	foutd.open(out + "_fdist.dat", ios::out);
-	if(!foutd.is_open()) {
-		cerr << "Couldn't open output file " << out + "_fdist.dat" << " . Will now hold." << endl;
-		return 1;
+		foutd.open(out + "_fdist.dat", ios::out);
+		if(!foutd.is_open()) {
+			cerr << "Couldn't open output file " << out + "_fdist.dat" << " . Will now hold." << endl;
+			return 1;
+		}
 	}
 
 	// write the circuit identifier to the files
 	for(unsigned i : gate_order) {
-		foutd << i << " ";
 		foutc << i << " ";
-		fout << i << " ";
+		if(verbose == true) {
+			foutd << i << " ";
+			fout << i << " ";
+		}
 	}
-	fout << endl;
-	foutd << endl;
+	if(verbose == true) {
+		fout << endl;
+		foutd << endl;
+	}
 
 
 	// --- find the noise threshold via interval division method
@@ -312,8 +318,10 @@ for(unsigned c=0; c < niter; c++) {
 				convolve_mod2(pdist1, dn, pdist0, 2*number_of_qubits);
 			}
 
-			foutd << "Final distribution for p = " << p1m << endl;
-			write_pdist(foutd, pdist0, number_of_qubits);
+			if(verbose == true) {
+				foutd << "Final distribution for p = " << p1m << endl;
+				write_pdist(foutd, pdist0, number_of_qubits);
+			}
 
 			// compute adjoint representation of the final channel
 			noisyT_2Q(pdist0, y);
@@ -325,26 +333,24 @@ for(unsigned c=0; c < niter; c++) {
 		
 		// solve & write solution
 		ret_status = lp.check_point(y);
-		//lp.write_sol(output_prefix + to_string(p) + ".dat");
-		fout << p1m << " " << lp.get_result() << " " << ret_status << " " << lp.get_status() << endl;
+		if(verbose == true) {
+			//lp.write_sol(output_prefix + to_string(p) + ".dat");
+			fout << p1m << " " << lp.get_result() << " " << ret_status << " " << lp.get_status() << endl;
+		}
 
 		cout << endl;
 		cout << "---------------------------------------------------" << endl << endl;
 
 		if(lp.get_result() > 0) {
 			// left of the optimal value
-			// cout << "left" << endl;
 
 			// set new interval
 			p1l = p1m;
 			p0m = p1m;
 			p1m = fabs(p1r + p1l)/2.;
 
-			// cout << p1l << " " << p1r << " " << p1m << endl;
-
 		} else {
 			// right of the optimal value
-			// cout << "right" << endl;
 
 			// set new interval
 			p1r = p1m;
@@ -361,8 +367,10 @@ for(unsigned c=0; c < niter; c++) {
 
 	foutc << p1m << " " << iter_counter << endl;
 
-	fout.close();
-	foutd.close();
+	if(verbose == true) {
+		fout.close();
+		foutd.close();
+	}
 
 }
 // --- end of circuit loop
