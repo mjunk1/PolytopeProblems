@@ -313,7 +313,7 @@ for(unsigned c=0; c < niter; c++) {
 			// write_pdist(out + "_" + to_string(p) + "_dist.dat", pdist0, number_of_qubits);
 
 			// propagate through circuit
-			for(unsigned i=0; i<circuit_length; i++) {
+			for(unsigned i=1; i<circuit_length; i++) {
 				symplectic_transform(pdist0, pdist1, gates[gate_order[i]], number_of_qubits);
 				convolve_mod2(pdist1, dn, pdist0, 2*number_of_qubits);
 			}
