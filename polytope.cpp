@@ -1,43 +1,29 @@
 #include <iostream>
 #include <glpk.h>
 #include <fstream>
-#include <random>
 #include <map>
 #include <tclap/CmdLine.h>
-#include "utilities.h"
 
-#ifndef POLYTOPEPROGRAM_H
-#include "PolytopeProgram.h"
-#endif
+#include "ConvexSeperation.h"
 
 using namespace std;
 
 /* input to the program:
 
 	* number of qubits
-	* length of the circuit
-	* density of CNOTs
 	* constraint matrix consisting of the coordinates of the polytope vertices, specified in some data file
 
 */
 
 /* structure of the program:
-	(1) read parameters and constraint matrix etc.
-	(2) create a random Clifford circuit								\
-		(2a) propagate noise through the circuit						|	optional (later) or Mathematica?
-		(2b) compute adjoint representation of foutal noisy T channel	/
-	(3) for this channel, solve the membership problem as a function of the individual noise strength p
-	(4) output data 
-	(5) restart at (2)
+	(1) read parameters, constraint matrix and set up solver
+	(2) start iteration base on interval division method
+		(i) generate point to check y = y(p)
+		(ii) update p depending on the result
+		(iii) restart at (i) until converged to the threshold value p = p_th 
+	(3) output results
 */
 
-
-/* To do:
-----------------
-	(1) Write a method to directly find the threshold. This could be done using an interval division method.
-	(2) ...
-
-*/
 
 
 int main(int argc, char** argv) {
@@ -176,221 +162,46 @@ try {
 // ----- prepare computation
 // ----------------------------------
 
-GLPKPolytopeProgram lp (number_of_vertices, dimension, cmatrix_file);
+GLPKConvexSeperation lp (number_of_vertices, dimension, cmatrix_file);
 lp.set_method(method);
 int ret_status;
 string out;
-fstream fout,foutd,foutc;
-int len = pow(4,number_of_qubits); // number of points in phase space
+fstream fout;
 
-// probability vectors
-double *dn = new double[len];
-double *pdist0 = new double[len];
-double *pdist1 = new double[len];
+// noise model to use
+DepolarisingNoise2Q dp_noise;
 
-// coordinates of the noisy channel (GLPK index convention: indices start at 1)
-double *y = new double[dimension+1];
+// configure circuit 
+CliffordCircuit2Q circuit_gen;
 
-// --- randomized circuit generation 
+if(circuit.size() != 0) 
+	circuit_gen.set_circuit(circuit);
+else
+	circuit_gen.randomise(circuit_length, cnot_prob);
 
-// symplectic representations of elementary channels
-// unsigned H1[4] = { 0b1010, 0b0101, 0b0010, 0b0001 };
-// unsigned H2[4] = { 0b1100, 0b0100, 0b0011, 0b0001 };
-// unsigned S1[4] = { 0b0010, 0b0001, 0b1000, 0b0100 };
-// unsigned S2[4] = { 0b0100, 0b1000, 0b0001, 0b0010 };
-unsigned H1[4] = { 0b1100, 0b0100, 0b0010, 0b0001 };
-unsigned H2[4] = { 0b1000, 0b0100, 0b0011, 0b0001 };
-unsigned S1[4] = { 0b0100, 0b1000, 0b0010, 0b0001 };
-unsigned S2[4] = { 0b1000, 0b0100, 0b0001, 0b0010 };
-unsigned CNOT[4] = { 0b1010, 0b0110, 0b0010, 0b1101 };
-unsigned ID[4] = { 0b1000, 0b0100, 0b0010, 0b0001 };
+circuit_gen.set_elemental_noise(&dp_noise);
 
-// making the gate access a bit easier
-vector<unsigned*> gates = { H1, H2, S1, S2, CNOT, ID };
-map<string, unsigned> gate_id = { {"H1", 0}, {"H2", 1}, {"S1", 2}, {"S2", 3}, {"CNOT", 4}, {"ID", 5} };
-vector<unsigned> gate_order (circuit_length, 0);
+// representation of noisy channel
+noisyT_channel_2Q y(&circuit_gen);
 
-// Prepare random circuit generation
-// We use a Marsenne-Twister generator which is seeded by a random_device 
-// cnot_prob is used to generate the distribution. It is assumed that H and S gates occur with the same probability
-double hs_prob = (1.-cnot_prob)/4.;
-random_device rd; 
-mt19937 rd_gen(rd()); 
-discrete_distribution<> rd_dist( { hs_prob, hs_prob, hs_prob, hs_prob, cnot_prob } ); 
-
-
-// for every circuit, the threshold is saved to this file
-out = output_prefix + "_" + to_string(circuit_length);
-foutc.open(out + ".dat", ios::out);
-if(!foutc.is_open()) {
-	cerr << "Couldn't open output file " << out + ".dat" << " . Will now hold." << endl;
-	return 1;
-}
-
-// initialize variables for interval division method
-double p1l, p1r, p0m, p1m;
-unsigned max_iter = 50;
-unsigned iter_counter = 0;
-
+// output
+// out = output_prefix;
+// fout.open(out + ".dat", ios::out);
+// if(!fout.is_open()) {
+// 	cerr << "Couldn't open output file " << out + ".dat" << " . Will now hold." << endl;
+// 	return 1;
+// }
 
 // ----------------------------------
 // ------ start computation
 // ----------------------------------
 
-// circuit loop
-for(unsigned c=0; c < niter; c++) {
-
-	// --- generate circuit
-
-	if(circuit.size() != 0) {
-		// this means an explicit circuit has been set
-		for(unsigned i=0; i<circuit_length; i++) 
-			gate_order.at(i) = gate_id[circuit.at(i)];
-
-	} else {
-		// generate a random circuit of given length
-		cout << "Generating circuit of length " << circuit_length << endl;
-		cout << "---------------------------------------------------" << endl << endl;
-
-		for(unsigned i=0; i<circuit_length; i++)			
-			gate_order.at(i) = rd_dist(rd_gen);
-	}
+// solve & write solution
+double pth = lp.check_family(y);
+cout << "Threshold value p_th = " << pth << endl;
 
 
-	// --- prepare output files
-
-	// the order of gates serves as identifier for the output file
-	out = output_prefix + "_";
-	for(unsigned i : gate_order)
-		out += to_string(i);
-
-	cout << "Circuit file: " << out << endl << endl;
-
-	// we will write the optimal value of the objective function for every value of the noise strength to this file
-	if(Quiet == false) {
-		fout.open(out + "_out.dat", ios::out);
-		if(!fout.is_open()) {
-			cerr << "Couldn't open output file " << out + "_out.dat" << " . Will now hold." << endl;
-			return 1;
-		}
-
-		foutd.open(out + "_fdist.dat", ios::out);
-		if(!foutd.is_open()) {
-			cerr << "Couldn't open output file " << out + "_fdist.dat" << " . Will now hold." << endl;
-			return 1;
-		}
-	}
-
-	// write the circuit identifier to the files
-	for(unsigned i : gate_order) {
-		foutc << i << " ";
-		if(Quiet == false) {
-			foutd << i << " ";
-			fout << i << " ";
-		}
-	}
-	if(Quiet == false) {
-		fout << endl;
-		foutd << endl;
-	}
-
-
-	// --- find the noise threshold via interval division method
-
-	// reset interval variables
-	p1r = nupper;
-	p1l = nlower;
-	p0m = 0;
-	p1m = fabs(nupper + nlower)/2.;
-	iter_counter = 0;
-
-	// loop until desired accuracy is reached
-	while( fabs(p1m-p0m) > eps && iter_counter < max_iter ) {
-
-		cout << "Starting optimization for noise strength p = " << p1m << endl;
-		cout << "---------------------------------------------------" << endl << endl;
-
-		// init pvec
-		if(number_of_qubits == 1) {
-			dn_pdist_1Q(p1m, dn);
-			noisyT_1Q(dn, y);
-		}
-		else if(number_of_qubits == 2) {
-			dn_pdist_2Q(p1m, dn);
-			copy(dn, dn+len, pdist0);
-
-			// write_pdist(out + "_" + to_string(p) + "_dist.dat", pdist0, number_of_qubits);
-
-			// propagate through circuit
-			for(unsigned i=1; i<circuit_length; i++) {
-				symplectic_transform(pdist0, pdist1, gates[gate_order[i]], number_of_qubits);
-				convolve_mod2(pdist1, dn, pdist0, 2*number_of_qubits);
-			}
-
-			if(Quiet == false) {
-				foutd << "Final distribution for p = " << p1m << endl;
-				write_pdist(foutd, pdist0, number_of_qubits);
-			}
-
-			// compute adjoint representation of the final channel
-			//noisyT_2Q_adjoint(pdist0, y);
-
-			// compute matrix representation of the final channel
-			noisyT_2Q(pdist0, y);
-		}
-		else {
-			break;
-		}
-
-		
-		// solve & write solution
-		ret_status = lp.check_point(y);
-		if(Quiet == false) {
-			//lp.write_sol(output_prefix + to_string(p) + ".dat");
-			fout << p1m << " " << lp.get_result() << " " << ret_status << " " << lp.get_status() << endl;
-		}
-
-		cout << endl;
-		cout << "---------------------------------------------------" << endl << endl;
-
-		if(lp.get_result() > 0) {
-			// left of the optimal value
-
-			// set new interval
-			p1l = p1m;
-			p0m = p1m;
-			p1m = fabs(p1r + p1l)/2.;
-
-		} else {
-			// right of the optimal value
-
-			// set new interval
-			p1r = p1m;
-			p0m = p1m;
-			p1m = fabs(p1r + p1l)/2.;
-		}
-
-		++iter_counter;
-	}
-
-	if(iter_counter == max_iter) {
-		cout << "Maximum number of iterations reached (max = " << max_iter << ")" << endl;
-	}
-
-	foutc << p1m << " " << iter_counter << endl;
-
-	if(Quiet == false) {
-		fout.close();
-		foutd.close();
-	}
-
-}
-// --- end of circuit loop
-
-foutc.close();
-
-// ------ free stuff
-delete[] y;
-delete[] dn, pdist0, pdist1;
+// end
+// fout.close();
 
 }
