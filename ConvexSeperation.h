@@ -5,15 +5,35 @@
 #include <string>
 #include <vector>
 #include <cassert>
+#include <stdexcept>
+#include <algorithm>
 
-#ifndef GENERATOR_H
-#include "Generator.h"
+#ifndef UTILITIES_H
+#include "utilities.h"
 #endif
 
 using namespace std;
 
 
-// ----- header file for solving convex seperation problems
+// ----- Abstract Generator classes
+
+class PointGenerator {
+public:
+	virtual vector<double> operator() (double p) = 0;
+};
+
+class PSDistributionGenerator {
+protected:
+	unsigned _length;
+public:
+	virtual vector<double> operator() (double p) = 0;
+
+	unsigned get_length() {
+		return _length;
+	}
+};
+
+// ----- Convex seperation classes
 
 class ConvexSeperation {
 protected:
@@ -52,10 +72,10 @@ public:
 
 class GLPKConvexSeperation: public ConvexSeperation {
 protected:
-	// size parameters
-	unsigned _nentries = 0;
-
-	// constraint matrix = coordinates of vertices
+	// constraint matrix: every row contains the coordinates of a vertex
+	// saved in (coo) sparse format
+	unsigned _nvertices; 
+	unsigned _nnz;
 	vector<int> _ia;
 	vector<int> _ja;
 	vector<double> _a;	
@@ -82,8 +102,6 @@ protected:
 public:
 
 	// Constructors
-	GLPKConvexSeperation() { }
-
 	GLPKConvexSeperation(unsigned nvertices, unsigned dimension, string cmatrix_file) {
 
 		_nvertices = nvertices;
@@ -103,21 +121,24 @@ public:
 			exit (EXIT_FAILURE);
 	}
 
+	GLPKConvexSeperation(unsigned dimension, string cmatrix_file): GLPKConvexSeperation(0, dimension, cmatrix_file) {
+	}
+
 	// Destructor
 	~GLPKConvexSeperation() {
 		glp_delete_prob(_lp);
 	}
 
-	// methods
+	// input
 	int read_vertex_matrix(string cmatrix_file) {
 
 		// ----- read sparse constraint matrix
 
 		// GLPK convention: data start at index 1
-		_nentries = get_number_of_lines(cmatrix_file);
-		_ia.resize(_nentries+1);
-		_ja.resize(_nentries+1);
-		_a.resize(_nentries+1);
+		_nnz = get_number_of_lines(cmatrix_file);
+		_ia.resize(_nnz+1);
+		_ja.resize(_nnz+1);
+		_a.resize(_nnz+1);
 
 		// open file and read
 		fstream fin(cmatrix_file, ios::in);
@@ -131,6 +152,11 @@ public:
 		}
 
 		fin.close();
+
+		if(_nvertices == 0) {
+			// was not specified and will be deduced from file
+			_nvertices = _ia.at(_nnz);
+		}
 
 		// ----- create GLPK problem 
 
@@ -167,7 +193,7 @@ public:
 		glp_set_col_bnds(_lp, _dim+1, GLP_FR, 0.0, 0.0);
 
 		// setting up constraint matrix
-		glp_load_matrix(_lp, _nentries, _ia.data(), _ja.data(), _a.data());
+		glp_load_matrix(_lp, _nnz, _ia.data(), _ja.data(), _a.data());
 
 		// setting last column
 		vector<int> ind (_nvertices+2);
@@ -186,13 +212,23 @@ public:
 		_method = s;
 	}
 
+	int set_parameters(double lbnd = 0, double ubnd = 1, unsigned max_iter = 50, double precision = 1e-6) {
+		_lbnd = lbnd;
+		_ubnd = ubnd;
+		_max_iter = max_iter;
+		_precision = precision;
+	}
+
+
+	// operations
 	int check_point(vector<double> &y) {
-		if(y.size() != _dim) {
-			cout << "Error: check_point() received a vector of wrong size." << endl;
-			return -1;
-		}
+		assert(y.size() == _dim);
+			
 		// copying y
 		copy(y.begin(), y.end(), _y.begin()+1);
+
+		// make sure last element is -1
+		_y.at(_dim+1) = -1.;
 
 		// replacing the last row of the constraint matrix
 		glp_set_mat_row(_lp, _nvertices+1, _dim+1, _ind.data(), _y.data());
@@ -216,14 +252,10 @@ public:
 		return _glp_ret;
 	}
 
-	int set_parameters(double lbnd = 0, double ubnd = 1, unsigned max_iter = 50, double precision = 1e-6) {
-		_lbnd = lbnd;
-		_ubnd = ubnd;
-		_max_iter = max_iter;
-		_precision = precision;
-	}
-
 	double check_family(PointGenerator &y) {
+		// Note: This function should check for the correct "search direction" first. I.e. it has to identify which endpoint of the curve lies inside the polytope and which one lies outside. This is needed in order to correctly search of the intersection point parameter in the search interval [_lbnd, _ubnd].
+		// Another note: There is certainly a smarter way to do this, too. This method can only handle a curve which starts outside the polytope, ends in the polytope and has only one intersection point with its boundary. That's enough for now, but for more general scenarios, this strategy has to be changed (e.g. starting from one endpoint and approaching the intersection point. As soon as it is passed, start interval division to find the precise location.)
+
 		// initialize variables for interval division method
 		double p1r = _ubnd;
 		double p1l = _lbnd;
@@ -278,10 +310,107 @@ public:
 		return p1m;
 	}
 
-	void write_sol(string outfile) {
-		glp_print_sol(_lp, outfile.c_str());
+	int delete_point(unsigned number) {
+		assert(number <= _nvertices && number > 0);
+
+		const int nums[] = {0, (int)number};
+		glp_del_rows(_lp, 1, nums);
+
+
+		// now we should also remove all data associated with row #number from the data containers. Since it is in coordinate format, we have to search the row vector _ia for occurrences of number and delete the entries in _ia, _ja and _a that correspond to that index.
+		unsigned index;
+
+		auto it = find(_ia.begin(), _ia.end(), number);
+		while( it != _ia.end() ) {
+			// get index
+			index = distance(_ia.begin(), it);
+
+			// delete elements
+			_ia.erase(it);
+			_ja.erase(_ja.begin() + index);
+			_a.erase(_a.begin() + index);
+
+			// keep track of non-zero elements
+			--_nnz;
+
+			// keep searching
+			it = find(_ia.begin(), _ia.end(), number);
+		}
+
+		// we have successfully remove the vertex, so we keep track of that
+		--_nvertices;
+
+		// now we have to relabel the row indices
+		for(auto it = find(_ia.begin(), _ia.end(), number+1); it != _ia.end(); it++) {
+			--(*it);
+		}
+
+
+		return _nvertices;
 	}
 
+	int delete_redundant_points() {
+
+		// indexing vars
+		unsigned index;
+		unsigned point = 1;
+
+		// used to temporarily save the coordinates of a point 
+		vector<double> y (_dim, 0.);
+
+		cout << _nnz << endl;
+
+		while (point <= _nvertices) {
+			// get coordinates of "vertex candidate"
+			auto it = find(_ia.begin(), _ia.end(), point);
+
+			while( it != _ia.end() ) {
+				// get index
+				index = distance(_ia.begin(), it);
+
+				// set point
+				y.at(_ja.at(index)-1) = _a.at(index);
+
+				// keep searching
+				it = find(it+1, _ia.end(), point);
+			}
+
+			//temporarily set the i-th row to zero (remove the constraint corresponding to the vertex candidate)
+			glp_set_mat_row(_lp, point, 0, NULL, NULL);
+			// if(glp_bf_exists(_lp) == 0) {
+			// 	if(glp_factorize(_lp) != 0)  {
+					glp_std_basis(_lp);
+			// 	}
+			// }
+
+			// now check if our point is in the convex hull of all the other points
+			check_point(y);
+
+			// check result and delete if necessary
+			if(get_result() > 0){
+				// it is not redundant, restore row
+				glp_set_mat_row(_lp, point, _dim+1, _ind.data(), _y.data());	
+
+				// check the next point in the next loop
+				++point;
+			} 
+			else {
+				// it is redundant
+				delete_point(point);
+
+				// do not increase point, since it refers now to the next index
+
+				cout << "Deleted point #" << point << endl;
+			}
+		}
+
+		cout << _nnz << endl;
+
+		return _nvertices;
+	}
+
+
+	// get methods
 	double get_result() {
 		if(_method == "simplex")
 			return glp_get_obj_val(_lp);
@@ -295,10 +424,35 @@ public:
 		else
 			return glp_ipt_status(_lp);
 	}
+
+	unsigned get_nvertices() {
+		return _nvertices;
+	}
+
+
+	// output methods
+	void write_sol(string outfile) {
+		glp_print_sol(_lp, outfile.c_str());
+	}
+
+	void write_constraint_matrix(string outfile) {
+		ofstream fout (outfile);
+
+		if(fout.is_open()) {
+			for(unsigned i = 1; i <= _nnz; i++) {
+				fout << _ia.at(i) << " " << _ja.at(i) << " " << _a.at(i) << endl;
+			}
+			fout.close();
+		}
+		else {
+			cout << "Error in GLPKConvexSeperation::write_constraint_matrix : Couldn't open file " + outfile + " for writing" << endl;
+		}
+	}
 };
 
-// class SoPlexConvexSeperation : public ConvexSeperation {
-	
-// }
+
+
+
+
 
 #endif
