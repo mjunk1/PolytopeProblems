@@ -1,6 +1,7 @@
 #ifndef NOISE_H
 #define NOISE_H
 #include <vector>
+#include <map>
 #include <string>
 #include <cmath>
 #include <iostream>
@@ -192,25 +193,25 @@ vector<double> noisyT_2Q(double *p) {
 }
 
 vector<double> noisyT(unsigned n, vector<double> &phat) {
+	// checked
 	// note that the very first entry in the Liouville representation is trivial for unital channels
-	unsigned len = pow(4,n+1);
+	unsigned nbits = 2*n+2;
+	unsigned len = (1U << nbits); // len = pow(2,nbits)
+
 	vector<double> ret( len - 1 );
 
 	unsigned j,b;
 
 	for(unsigned i=1; i < len; i++) {
 		// extract first 4 digits of index
-		j = i >> (2U*n-2U);
+		j = i >> (nbits - 4U);
 
 		// extract the last 2n digits
 
-		// set bit 2n and 2n+1
-		b = 0;
-		b |= (1U << 2U*n); 
-		b |= (1U << (2U*n+1U)); // b = ...001100..00
-		// negate, b = ...110011..11
-		b = ~b; 
-		// bitwise and with i, which sets bit 2n and 2n+1 to 0
+		// set bits up to 2n
+		b = (1U << 2U*n) - 1U;
+
+		// bitwise and with i, which keeps bits up to bit 2n
 		b = i&b;
 
 		// now set the array

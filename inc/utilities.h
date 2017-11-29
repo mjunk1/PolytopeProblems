@@ -94,18 +94,7 @@ unsigned get_linear_index(const unsigned arr_dim, const unsigned arr_range, cons
 
 
 
-// ----- computational routines
-
-unsigned get_number_of_lines(string filename) {
-	unsigned n=0;
-	string line;
-	fstream fin(filename, ios::in);
-	if(fin.is_open())
-		while(getline(fin, line))
-			++n;
-	fin.close();
-	return n;
-}
+// ----- bit manipulation
 
 unsigned popcount(unsigned i) {
 	return __builtin_popcount(i);
@@ -116,48 +105,41 @@ unsigned parity(unsigned i) {
 }
 
 
-
-// ---- Phase space methods
-
-// This is the convolution p3 = p1 * p2 in (Z_2)^n (addition mod 2)
-int convolve_mod2(double *p1, double *p2, double *p3, const unsigned n) {
-  unsigned len = pow(2U,n);
-  unsigned i,j;
-
-  for(i=0; i<len; i++) {
-    p3[i] = 0;
-    
-    for(j=0; j<len; j++) {
-      p3[i] += p1[j] * p2[i^j];
-    } 
-  }
-  return 0;
+// get j-th bit of b, counted from the end of the bitstring
+inline unsigned get_bit(unsigned b, unsigned j, unsigned n) {
+	return ((b >> ((n)-(j)-1U)) & 1U);
 }
 
-// Computes the matrix vector product Ax over Z_2. It is assumed that a vector in Z_2^n is represented as a bitstring encoded as an unsigned integer. In this representation, every row of the matrix A corresponds to an unsigned integer, hence A is an unsigned array. The ouput is again an unsigned integer.
-unsigned matrix_vector_prod_mod2(const unsigned *A, const unsigned x, const unsigned n) {
-	unsigned b = 0;
-
-	/* This performs the formula:
-		b_i = sum_{j=1}^n A_ij x_j
-		
-		In the bitstring representation, this means that we have to multiply A[i] with x bitwise, afterwards adding up the resulting bits mod 2. The last step is just counting the number of ones and taking its modulus (here, called parity). Finally, we set the i-th bit of b to this result.
-		Note that, in contrast to the usual convention, we count bits from the left since we see bitstrings as binary vectors. This means that the last bit is the least significant one.
-	*/
-	for (unsigned i=0; i<n; i++) 
-		b ^= ((-parity( A[i]&x )) ^ b) & (1U << (n-i-1U)); 
-
-	return b;	
+inline unsigned get_bits(unsigned b, unsigned j, unsigned k, unsigned n) {
+	return ((b >> (n-k-1U)) & ((1U << (k-j+1U))-1));
 }
 
-int symplectic_transform(double *pin, double *pout, const unsigned *S, const unsigned nqubits) {
-	unsigned j;
-	for(unsigned i=0; i<pow(4,nqubits); i++) {
-		j = matrix_vector_prod_mod2(S, i, 2U*nqubits);
-		pout[j] = pin[i];
+inline unsigned set_bit(unsigned b, unsigned j, unsigned n) {
+	return (b | (1 << (n-j-1U)));
+}
+
+string write_bits(unsigned b, unsigned n) {
+	string str;
+
+	for(unsigned j=0; j<n; j++) {
+		str += to_string(get_bit(b,j,n)); 
 	}
 
-	return 0;
+	return str;
+}
+
+
+// ----- input / output
+
+unsigned get_number_of_lines(string filename) {
+	unsigned n=0;
+	string line;
+	fstream fin(filename, ios::in);
+	if(fin.is_open())
+		while(getline(fin, line))
+			++n;
+	fin.close();
+	return n;
 }
 
 int write_pdist(fstream &fout, double *p, unsigned nqubits) {

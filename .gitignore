@@ -1,4 +1,9 @@
 *.log
 *.dat
+*.sh
 polytope
+eliminate_points
+symplectic_test
+log/*
+constraints/*
 data/*
