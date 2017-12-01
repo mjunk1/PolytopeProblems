@@ -16,14 +16,6 @@ using namespace std;
 
 */
 
-/* structure of the program:
-	(1) read parameters, constraint matrix and set up solver
-	(2) start iteration base on interval division method
-		(i) generate point to check y = y(p)
-		(ii) update p depending on the result
-		(iii) restart at (i) until converged to the threshold value p = p_th 
-	(3) output results
-*/
 
 
 

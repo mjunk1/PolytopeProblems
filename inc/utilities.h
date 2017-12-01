@@ -21,7 +21,6 @@ using namespace std;
 
 
 
-
 // ----- indexing routines
 
 /* Computes the multi index for a given linear index assuming row-major order 
@@ -118,6 +117,10 @@ inline unsigned set_bit(unsigned b, unsigned j, unsigned n) {
 	return (b | (1 << (n-j-1U)));
 }
 
+inline unsigned reset_bit(unsigned b, unsigned j, unsigned n) {
+	return (b & (~(1 << (n-j-1U))));
+}
+
 string write_bits(unsigned b, unsigned n) {
 	string str;
 
@@ -128,6 +131,21 @@ string write_bits(unsigned b, unsigned n) {
 	return str;
 }
 
+unsigned invert_bits(const unsigned b, const unsigned n) {
+	// Returns a copy of b with inverted ordering of bits, e.g.
+	// 		0010110 ---> 0110100
+	// Note that this function "sees" only the first n bits, all the other bits are set to zero. I.e. calling the function for b = 0010110 with n = 6 will instead give
+	// 		0010110 ---> 0011010
+
+	unsigned r = 0;
+	for(unsigned i=0; i<n; i++) {
+		if(get_bit(b,i,n) == 1) {
+			r |= 1<<i;
+		}
+	}
+	return r;
+}
+
 
 // ----- input / output
 
@@ -135,9 +153,11 @@ unsigned get_number_of_lines(string filename) {
 	unsigned n=0;
 	string line;
 	fstream fin(filename, ios::in);
-	if(fin.is_open())
-		while(getline(fin, line))
+	if(fin.is_open()) {
+		while(getline(fin, line)) {
 			++n;
+		}
+	}
 	fin.close();
 	return n;
 }

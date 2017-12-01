@@ -117,8 +117,9 @@ public:
 			_ind.push_back(i);
 
 		// reading vertex coordinates
-		if(read_vertex_matrix(cmatrix_file))
+		if(read_vertex_matrix(cmatrix_file) != 0) {
 			exit (EXIT_FAILURE);
+		}
 	}
 
 	GLPKConvexSeperation(unsigned dimension, string cmatrix_file): GLPKConvexSeperation(0, dimension, cmatrix_file) {
@@ -144,8 +145,9 @@ public:
 		fstream fin(cmatrix_file, ios::in);
 		int n = 1;
 		if(fin.is_open()) {
-			while(fin >> _ia[n] >> _ja[n] >> _a[n])
+			while(fin >> _ia[n] >> _ja[n] >> _a[n]) {
 				++n;
+			}
 		} else {
 			cerr << "Error: Couldn't open file " << cmatrix_file << endl;
 			return 1;

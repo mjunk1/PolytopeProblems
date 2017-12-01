@@ -13,6 +13,10 @@
 #include "utilities.h"
 #endif
 
+#ifndef SYMPLECTIC_H
+#include "symplectic.h"
+#endif
+
 #ifndef CONVEXSEPERATION_H
 #include "ConvexSeperation.h"
 #endif

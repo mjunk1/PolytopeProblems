@@ -1,9 +1,8 @@
 *.log
 *.dat
 *.sh
-polytope
-eliminate_points
-symplectic_test
+TBD
 log/*
 constraints/*
 data/*
+bin/*
