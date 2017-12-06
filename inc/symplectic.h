@@ -42,35 +42,13 @@ int mod(int x, int m) {
 // ---- Phase space methods
 
 unsigned eta(const unsigned a, const unsigned b, const unsigned n) {
-	// Computes the phase that is appearing in the composition law of Weyl operators:
-	//		W(a)W(b) = i^{\eta(a,b)+\eta(b,a)} W(a+b)
+	// Computes the phase that is appearing in definition of Weyl operators:
+	//		W(a) = i^{-\eta(a,a)} Z(a_z)X(a_x)
 	// \eta is actually a Z_4-valued function.
 	unsigned ret = 0;
 
 	for(unsigned i=0; i<n; i++) {
 		ret += ( get_bit(a,2U*i+1U,2U*n) * get_bit(b,2U*i,2U*n) );
-	}
-
-	return ret;
-}
-
-unsigned eta(const vector<unsigned> a, const unsigned n) {
-	// Compute the phase that is appearing in the product of many Weyl operators
-	//		W(a_1)W(a_2)...W(a_m) = i^{-\eta(a_1,...,a_m)}W(a_1+...+a_m)
-	// This phase is given by
-	//		\eta(a_1,...,a_m) = \sum_{j=1}^{m-1} \eta(a_j,\sum_{k=j+1}^m a_k)
-	//
-	unsigned ret = 0;
-	unsigned m = a.size();
-	unsigned aa;
-	for(unsigned j=0; j<m-1; j++) {
-		aa = 0;
-		// sum up vectors 
-		for(unsigned k=j+1; k<m; k++) {
-			aa ^= a.at(k);
-		}
-		// add eta function
-		ret += eta(a.at(j),aa,n);
 	}
 	return ret;
 }
@@ -86,16 +64,20 @@ int phi(const vector<unsigned> a, const unsigned n) {
 	// Compute the phase that is appearing in the product of many Weyl operators
 	//		W(a_1)W(a_2)...W(a_m) = i^{\phi(a_1,...,a_m)}W(a_1+...+a_m)
 	// This phase is given by
-	//		\phi(a_1,...,a_m) = \sum_{j=1}^{m-1}\sum_{k=j+1}^m \phi(a_j, a_k)
+	//		\phi(a_1,...,a_m) = \sum_{j=1}^{m-1} \phi(a_j, \sum_{k=j+1}^m a_k)
 	//
 	unsigned ret = 0;
 	unsigned m = a.size();
+	unsigned aa;
 
 	// sum up phases
 	for(unsigned j=0; j<m-1; j++) {
+		aa = 0;
 		for(unsigned k=j+1; k<m; k++) {
-			ret += phi(a.at(j),a.at(k),n);
+			// sum up the vectors
+			aa ^= a.at(k);
 		}
+		ret += phi(a.at(j),aa,n);
 	}
 	return ret;
 }
@@ -187,7 +169,7 @@ unsigned transvection(const unsigned h, const unsigned x, const unsigned n) {
 
 // ---- Symplectic group generation
 
-unsigned phase_function(const unsigned a, const unsigned *S, const unsigned n) {
+int phase_function(const unsigned a, const unsigned *S, const unsigned n) {
 	// represents the phase function g of the trivial Clifford representative C with [C]=S in Sp(2n) = C(n)/P(n). It describes the action of C as follows:
 	//		C W_a C^\dagger = (-1)^{g(a)} W_{Sa} 
 
@@ -196,43 +178,27 @@ unsigned phase_function(const unsigned a, const unsigned *S, const unsigned n) {
 		return 0;
 	}
 
-	// now we split a in two parts, a = aa + lsb, where lsb only contains the least significant bit of a and hence represents a basis vector. Then we use the summation rule for g on this decomposition
+	// will be used for a basis expansion of a
+	// we will actually only store set bits in a
+	vector<unsigned> av;
+	av.reserve(2*n);
+	vector<unsigned> bv;
+	bv.reserve(2*n);
 
-	// get least significant bit
-	unsigned lsb = a & ~(a-1U);
-	// reset it in a 
-	unsigned aa = a & (a-1U);
-
-	// write_bits(lsb,2*n);
-	// write_bits(aa,2*n);
-
-	// recursion. This will terminate if aa has only one set bit left
-	return (( phase_function(aa,S,n) + eta(aa,lsb,n) + eta( matrix_vector_prod_mod2(S,aa,2*n), matrix_vector_prod_mod2(S,lsb,2*n), n ) ) % 2);
-}
-
-unsigned phase_function(const unsigned a, const vector<unsigned> S) {
-	// represents the phase function g of the trivial Clifford representative C with [C]=S in Sp(2n) = C(n)/P(n). It describes the action of C as follows:
-	//		C W_a C^\dagger = (-1)^{g(a)} W_{Sa} 
-
-	if(popcount(a) <= 1) {
-		// hence, either a == 0 or a is a basis vector in phase space
-		return 0;
+	unsigned aa = a;
+	while(aa != 0) {
+		// push back least significant bit
+		av.push_back(aa & ~(aa-1));
+		bv.push_back(matrix_vector_prod_mod2(S,aa & ~(aa-1),2*n));
+		// reset it in aa
+		aa = aa & (aa-1);
 	}
+	// compute phis
+	return (phi(bv,n) - phi(av,n));
 
-	unsigned n = S.size()/2;
-
-	// now we split a in two parts, a = aa + lsb, where lsb only contains the least significant bit of a and hence represents a basis vector. Then we use the summation rule for g on this decomposition
-
-	// get least significant bit
-	unsigned lsb = a & ~(a-1U);
-	// reset it in a 
-	unsigned aa = a & (a-1U);
-
-	// recursion. This will terminate if aa has only one set bit left
-	return (( phase_function(aa,S) + eta(aa,lsb,n) + eta( matrix_vector_prod_mod2(S,aa), matrix_vector_prod_mod2(S,lsb), n ) ) % 2);
 }
 
-int phase_function2(const unsigned a, const vector<unsigned> S) {
+int phase_function(const unsigned a, const vector<unsigned> S) {
 	// represents the phase function g of the trivial Clifford representative C with [C]=S in Sp(2n) = C(n)/P(n). It describes the action of C as follows:
 	//		C W_a C^\dagger = (-1)^{g(a)} W_{Sa} 
 
@@ -444,35 +410,49 @@ vector<unsigned> generate_symplectic_matrix(const unsigned i, const unsigned n) 
 }
 
 vector<int> projected_liouville_matrix(const vector<unsigned> S, const unsigned a=0) {
-	// Computes the Liouville matrix of the "trivial" Clifford representative corresponding to the symplectic matrix S, i.e. the one that acts Z/X Paulis as
+	// Computes the Liouville matrix of the "canonical" Clifford representative corresponding to the symplectic matrix S, i.e. the one that acts on Z/X Paulis as
 	//		C:  W(e_j) ---> +W(Se_j)
 	// Its action on an arbitrary Pauli operator W(b) is
  	//		C:  W(b) ---> (-1)^g(b) W(Sb)
  	// where g(b) is some phase function determined by S.
  	//
-	// Optionally, if 0<=a<=3 is specified, we include a term (-1)^[c,b_1] in the phase, which corresponds to the action of the 1-qubit Pauli group P_1. b_1 are the first two entries in the binary vector b.
+ 	// Note that this function returns the projection of the Liouville matrix
+ 	//
+	// Optionally, if 0<=a<4^n is specified, we include a term (-1)^[a,b] in the phase, which corresponds to the action of the n-qubit Pauli group P_n. 
 
 	unsigned n = S.size()/2;
-	unsigned m = pow(4,n+1);
-	unsigned b = 0;
-	vector<int> L(m-1);
+	unsigned m = pow(4,n);
+	unsigned i;
+	unsigned Sb;
+	vector<int> L(4*m-1,0);
+	int ph;
 
-	for(unsigned i=1; i<m; i++) {
-		// get the last 2n bits of i by setting the 0th and 1st to 0
-		b = reset_bit(i,0,2*n+2);
-		b = reset_bit(b,1,2*n+2);
+	for(unsigned b=1; b<m; b++) {
+		// compute the action on b
+		Sb = matrix_vector_prod_mod2(S, b);
 
-		// check if the first two bits of Sb agree with the first two bits of i
-		if(get_bits(i,0,1,2*n+2) == get_bits(matrix_vector_prod_mod2(S, b),0,1,2*n)) {
-			// they do
-			L.at(i-1) = pow(-1, phase_function(b,S) + symplectic_form(a,get_bits(b,0,1,2*n),1) );
+		// check if the the last 2*n-2 bits of Sb agree with the last 2*n-2 bits of b
+		if(get_bits(b,2,2*n-1,2*n) == get_bits(Sb,2,2*n-1,2*n)) {
+
+			// they do, now get the first two bits in Sb and append them in front of b
+			// this corresponds to the index in the projected Liouvillean
+			i = b ^ ( get_bits(Sb,0,1,2*n) << 2*n );
+
+			// this is the Pauli phase
+			L.at(i-1) = pow(-1, symplectic_form(a,b,n) );
+
+			// "canonical" phase
+			int ph = mod(phase_function(b,S),4);
+			assert(ph == 0 || ph == 2);
+			if(ph == 2) {
+				L.at(i-1) *= -1;
+			}
 		}
-		else{
-			L.at(i-1) = 0;
-		}
+		// every other entry is zero 
 	}
 	return L;
 }
+
 
 vector<int> liouville_matrix(const vector<unsigned> S, const unsigned c=0) {
 	// Computes the Liouville matrix of the "trivial" Clifford representative corresponding to the symplectic matrix S, i.e. the one that acts Z/X Paulis as
@@ -486,38 +466,7 @@ vector<int> liouville_matrix(const vector<unsigned> S, const unsigned c=0) {
 	unsigned n = S.size()/2;
 	unsigned m = 1 << 4*n;	// pow(16,n)
 	unsigned a,b;
-	vector<int> L(m);
-
-	for(unsigned i=0; i<m; i++) {
-		// get the first and last 2n bits of i
-		a = get_bits(i,0,2*n-1,4*n);
-		b = get_bits(i,2*n,4*n-1,4*n);
-
-		// check if a = Sb
-		if( a == matrix_vector_prod_mod2(S, b) ) {
-			// they do
-			L.at(i) = pow(-1, phase_function2(b,S) + symplectic_form(c,b,n) );
-		}
-		else{
-			L.at(i) = 0;
-		}
-	}
-	return L;
-}
-
-vector<int> liouville_matrix2(const vector<unsigned> S, const unsigned c=0) {
-	// Computes the Liouville matrix of the "trivial" Clifford representative corresponding to the symplectic matrix S, i.e. the one that acts Z/X Paulis as
-	//		C:  W(e_j) ---> +W(Se_j)
-	// Its action on an arbitrary Pauli operator W(b) is
- 	//		C:  W(b) ---> (-1)^g(b) W(Sb)
- 	// where g(b) is some phase function determined by S.
- 	//
-	// Optionally, if 0<=c<2*n is specified, we include a term (-1)^[c,b] in the phase, which corresponds to the action of the n-qubit Pauli group P_n. 
-
-	unsigned n = S.size()/2;
-	unsigned m = 1 << 4*n;	// pow(16,n)
-	unsigned a,b;
-	vector<int> L(m);
+	vector<int> L(m,0);
 	int ph;
 
 	for(unsigned i=0; i<m; i++) {
@@ -530,16 +479,11 @@ vector<int> liouville_matrix2(const vector<unsigned> S, const unsigned c=0) {
 			// they do
 			L.at(i) = pow(-1, symplectic_form(c,b,n) );
 
-			int ph = mod(phase_function2(b,S),4);
+			int ph = mod(phase_function(b,S),4);
 			assert(ph == 0 || ph == 2);
 			if(ph == 2) {
 				L.at(i) *= -1;
-			}
-			
-			
-		}
-		else{
-			L.at(i) = 0;
+			}			
 		}
 	}
 	return L;

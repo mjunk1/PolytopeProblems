@@ -52,26 +52,30 @@ try {
 // ----------------------------------
 
 cout << "Generate the symplectic group for n = " << n << " ..." << endl;
+cout << "Compute projections of Clifford group ... " << endl;
 
 // vectors to store the symplectic matrix and Liouville representation
 // we will store all Liouville at once to be able to delete duplicates
 unsigned spn = sp_order(n);
+unsigned paulin = pow(4,n);
 vector<unsigned> S(2*n);
-vector<vector<int>> L (4*spn, vector<int>(pow(4,n+1)-1) ); 
+vector<vector<int>> L (paulin*spn, vector<int>(pow(4,n+1)-1) ); 
 
 for(unsigned i=0; i<spn; i++) {
 	// generate i-th symplectic matrix
 	S = generate_symplectic_matrix(i,n);
 
 	// compute the 1-qubit Pauli orbit and save the relevant entries of the Liouville matrix
-	for(unsigned j=0; j<4; j++) {
-		L.at(4*i+j) = get_liouville_matrix(S,j);		
+	for(unsigned j=0; j<paulin; j++) {
+		L.at(paulin*i+j) = projected_liouville_matrix(S,j);		
 	}	
 }
 
 // sort and delete duplicates
 sort(L.begin(),L.end());
 auto last = unique(L.begin(),L.end());
+int d = distance(last,L.end());
+cout << "Deleted " << d << " duplicates. " << spn*paulin-d << " elements left." << endl;
 L.erase(last, L.end());
 
 // save L to file

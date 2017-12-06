@@ -13,39 +13,16 @@ using namespace std;
 
 int main(int argc, char** argv) {
 
-	unsigned N = 10;
-	unsigned n = 4;
-	vector<vector<int>> list (N,vector<int>(n)); // creates a vector of N vector<int> with length n
+	unsigned n = 2;
+	unsigned b;
 
-	// fill it with random numbers
-	random_device rd; 
-	mt19937 gen(rd()); 
-	uniform_int_distribution<> dist (1, n);
+	for(unsigned i=30; i<55; i++) {
+		cout << write_bits(i,2*n+2) << endl;
 
-	for(auto& v : list) {
-		for(unsigned i=0; i<n; i++) {
-			v.at(i) = dist(gen);
-		}
-	}
+		// get the last 2n bits of i by setting the 0th and 1st to 0
+		b = reset_bit(i,0,2*n+2);
+		b = reset_bit(b,1,2*n+2);
 
-	// print it
-	cout << "random list:" << endl;
-	for(auto& v : list) {
-		for(unsigned i=0; i<n; i++) {
-			cout << v.at(i) << " ";
-		}
-		cout << endl;
-	}
-
-	// let's sort it 
-	sort(list.begin(),list.end());
-
-	// print it
-	cout << "sorted list:" << endl;
-	for(auto& v : list) {
-		for(unsigned i=0; i<n; i++) {
-			cout << v.at(i) << " ";
-		}
-		cout << endl;
+		cout << write_bits(get_bits(i,2,2*n+1,2*n+2),2*n) << endl;
 	}
 }

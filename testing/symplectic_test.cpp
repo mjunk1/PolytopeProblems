@@ -104,39 +104,41 @@ int main(int argc, char** argv) {
 	// cout << "===   Start testing of symplectic group generation" << endl;
 	// cout << "=================================================" << endl;
 
-	// n = 3;
-	// samples = 20;
-	// dist = uniform_int_distribution<> (0, sp_order(n));
-	// unsigned j = dist(gen);
-	// unsigned p1,p2;
+	n = 3;
+	samples = 20;
+	dist = uniform_int_distribution<> (0, sp_order(n));
+	uniform_int_distribution<> dist2 (0,pow(4,n));
+	unsigned k;
+	unsigned p1,p2;
+	vector<unsigned> S;
 
-	// for(unsigned k=0; k<samples; k++) {	
-	// 	S = generate_symplectic_matrix(j,n);
-	// 	cout << "Generated random symplectic matrix S:" << endl;
-	// 	for(unsigned j=0; j<2*n; j++) {
-	// 		cout << "     " << write_bits(S.at(j),2*n) << endl; 
-	// 	}
+	for(unsigned k=0; k<samples; k++) {	
+		S = generate_symplectic_matrix(dist(gen),n);
+		cout << "Generated random symplectic matrix S:" << endl;
+		for(unsigned j=0; j<2*n; j++) {
+			cout << "     " << write_bits(S.at(j),2*n) << endl; 
+		}
 
-	// 	cout << "Test if it is really symplectic ... " << endl;
+		cout << "Test if it is really symplectic ... " << endl;
 
-	// 	for(unsigned i=0; i<samples; i++) {
-	// 		x = dist(gen);
-	// 		y = dist(gen);
+		for(unsigned i=0; i<10*samples; i++) {
+			x = dist2(gen);
+			y = dist2(gen);
 
-	// 		p1 = symplectic_form(x,y,n);
-	// 		p2 = symplectic_form(matrix_vector_prod_mod2(S,x),matrix_vector_prod_mod2(S,y),n);
+			p1 = symplectic_form(x,y,n);
+			p2 = symplectic_form(matrix_vector_prod_mod2(S,x),matrix_vector_prod_mod2(S,y),n);
 
-	// 		cout << "  ** Test for random pair (x,y)=(" << write_bits(x,2*n) << "," << write_bits(y,2*n) << "):     [x,y]=" << p1 << ",   [Sx,Sy]=" << p2 << "  ...  ";
-	// 		if(p1 == p2) {
-	// 			cout << "correct" << endl;
-	// 		}
-	// 		else {
-	// 			cout << "failed " << endl;
-	// 			cerr << "Error: Symplectic test not passed with random pair (x,y)=(" <<  write_bits(x,2*n) << "," << write_bits(y,2*n) << ")" << endl;
-	// 			break;
-	// 		}
-	// 	}
-	// }
+			cout << "  ** Test for random pair (x,y)=(" << write_bits(x,2*n) << "," << write_bits(y,2*n) << "):     [x,y]=" << p1 << ",   [Sx,Sy]=" << p2 << "  ...  ";
+			if(p1 == p2) {
+				cout << "correct" << endl;
+			}
+			else {
+				cout << "failed " << endl;
+				cerr << "Error: Symplectic test not passed with random pair (x,y)=(" <<  write_bits(x,2*n) << "," << write_bits(y,2*n) << ")" << endl;
+				break;
+			}
+		}
+	}
 
 	// cout << "Generate the whole group ..." << endl;
 	// string filename = "sp_" + to_string(2*n) + ".dat";
@@ -162,16 +164,16 @@ int main(int argc, char** argv) {
 	cout << "=================================================" << endl;
 
 	// vector<unsigned> M = { 0b01, 0b10 }; // H
-	// vector<unsigned> M = { 0b11, 0b01 }; // S
+	vector<unsigned> M = { 0b11, 0b01 }; // S
 	// vector<unsigned> M = { 0b0100, 0b1000, 0b0010, 0b0001 }; // H1
 	// vector<unsigned> M = { 0b1000, 0b0100, 0b0001, 0b0010 }; // H2
 	// vector<unsigned> M = { 0b1100, 0b0100, 0b0010, 0b0001 }; // S1
 	// vector<unsigned> M = { 0b1000, 0b0100, 0b0011, 0b0001 }; // S2
-	vector<unsigned> M = { 0b1010, 0b0100, 0b0010, 0b0101 }; // CNOT
+	// vector<unsigned> M = { 0b1010, 0b0100, 0b0010, 0b0101 }; // CNOT
 
 	n = M.size()/2;
 	unsigned i = 0;
-	vector<int> L = liouville_matrix2(M);
+	vector<int> L = liouville_matrix(M);
 	for(unsigned a=0; a<pow(4,n); a++) {
 		// a-th row
 		for(unsigned b=0; b<pow(4,n); b++) {

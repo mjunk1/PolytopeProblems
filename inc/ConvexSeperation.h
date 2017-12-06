@@ -355,58 +355,65 @@ public:
 
 		// indexing vars
 		unsigned index;
-		unsigned point = 1;
+		unsigned point;
+		unsigned nvertices_tmp;
+		unsigned max_loops = 10;
+		unsigned cnt = 0;
 
 		// used to temporarily save the coordinates of a point 
 		vector<double> y (_dim, 0.);
 
-		cout << _nnz << endl;
+		do {
+			nvertices_tmp = _nvertices;
+			point = 1;
 
-		while (point <= _nvertices) {
-			// get coordinates of "vertex candidate"
-			auto it = find(_ia.begin(), _ia.end(), point);
+			while (point <= _nvertices) {
+				// get coordinates of "vertex candidate"
+				auto it = find(_ia.begin(), _ia.end(), point);
 
-			while( it != _ia.end() ) {
-				// get index
-				index = distance(_ia.begin(), it);
+				while( it != _ia.end() ) {
+					// get index
+					index = distance(_ia.begin(), it);
 
-				// set point
-				y.at(_ja.at(index)-1) = _a.at(index);
+					// set point
+					y.at(_ja.at(index)-1) = _a.at(index);
 
-				// keep searching
-				it = find(it+1, _ia.end(), point);
+					// keep searching
+					it = find(it+1, _ia.end(), point);
+				}
+
+				//temporarily set the i-th row to zero (remove the constraint corresponding to the vertex candidate)
+				glp_set_mat_row(_lp, point, 0, NULL, NULL);
+				// if(glp_bf_exists(_lp) == 0) {
+				// 	if(glp_factorize(_lp) != 0)  {
+						glp_std_basis(_lp);
+				// 	}
+				// }
+
+				// now check if our point is in the convex hull of all the other points
+				check_point(y);
+
+				// check result and delete if necessary
+				if(get_result() > 0){
+					// it is not redundant, restore row
+					glp_set_mat_row(_lp, point, _dim+1, _ind.data(), _y.data());	
+
+					// check the next point in the next loop
+					++point;
+				} 
+				else {
+					// it is redundant
+					delete_point(point);
+
+					// do not increase point, since it refers now to the next index
+
+					cout << "Deleted point #" << point << endl;
+				}
 			}
 
-			//temporarily set the i-th row to zero (remove the constraint corresponding to the vertex candidate)
-			glp_set_mat_row(_lp, point, 0, NULL, NULL);
-			// if(glp_bf_exists(_lp) == 0) {
-			// 	if(glp_factorize(_lp) != 0)  {
-					glp_std_basis(_lp);
-			// 	}
-			// }
+			++cnt;
 
-			// now check if our point is in the convex hull of all the other points
-			check_point(y);
-
-			// check result and delete if necessary
-			if(get_result() > 0){
-				// it is not redundant, restore row
-				glp_set_mat_row(_lp, point, _dim+1, _ind.data(), _y.data());	
-
-				// check the next point in the next loop
-				++point;
-			} 
-			else {
-				// it is redundant
-				delete_point(point);
-
-				// do not increase point, since it refers now to the next index
-
-				cout << "Deleted point #" << point << endl;
-			}
-		}
-
-		cout << _nnz << endl;
+		} while( (nvertices_tmp != _nvertices) && (cnt < max_loops) );
 
 		return _nvertices;
 	}
