@@ -35,7 +35,7 @@ public:
 
 // ----- Convex seperation classes
 
-class ConvexSeperation {
+class ConvexSeparation {
 protected:
 	// size parameters
 	unsigned _nvertices = 0;
@@ -44,10 +44,10 @@ protected:
 public:
 
 	// Constructors
-	ConvexSeperation() { }
+	ConvexSeparation() { }
 
 	// Destructor
-	virtual ~ConvexSeperation() { }
+	virtual ~ConvexSeparation() { }
 
 	// abstract methods
 
@@ -70,7 +70,7 @@ public:
 
 
 
-class GLPKConvexSeperation: public ConvexSeperation {
+class GLPKConvexSeparation: public ConvexSeparation {
 protected:
 	// constraint matrix: every row contains the coordinates of a vertex
 	// saved in (coo) sparse format
@@ -85,7 +85,7 @@ protected:
 
 	// GLPK variables
 	glp_prob *_lp = nullptr;
-	// glp_smcp _parm;
+	glp_smcp _parm;
 	int _glp_ret = 0;
 	vector<int> _ind;
 	string _method = "simplex";
@@ -102,7 +102,7 @@ protected:
 public:
 
 	// Constructors
-	GLPKConvexSeperation(unsigned nvertices, unsigned dimension, string cmatrix_file) {
+	GLPKConvexSeparation(unsigned nvertices, unsigned dimension, string cmatrix_file) {
 
 		_nvertices = nvertices;
 		_dim = dimension;
@@ -120,13 +120,16 @@ public:
 		if(read_vertex_matrix(cmatrix_file) != 0) {
 			exit (EXIT_FAILURE);
 		}
+
+		// setting parameter struct to default values
+		glp_init_smcp(&_parm);
 	}
 
-	GLPKConvexSeperation(unsigned dimension, string cmatrix_file): GLPKConvexSeperation(0, dimension, cmatrix_file) {
+	GLPKConvexSeparation(unsigned dimension, string cmatrix_file): GLPKConvexSeparation(0, dimension, cmatrix_file) {
 	}
 
 	// Destructor
-	~GLPKConvexSeperation() {
+	~GLPKConvexSeparation() {
 		glp_delete_prob(_lp);
 	}
 
@@ -243,13 +246,11 @@ public:
 		// changes in the constraint matrix generally invalides the basis factorization
 		//if(glp_bf_exists(_lp) == 0)
 		//	glp_factorize(_lp);
-		glp_warm_up(_lp);
+		// glp_warm_up(_lp);
+		glp_std_basis(_lp);
 		
 		// solve
-		if(_method == "simplex")
-			_glp_ret = glp_simplex(_lp, NULL);
-		else
-			_glp_ret = glp_interior(_lp, NULL);
+		_glp_ret = glp_simplex(_lp, &_parm);
 
 		return _glp_ret;
 	}
@@ -351,7 +352,7 @@ public:
 		return _nvertices;
 	}
 
-	int delete_redundant_points() {
+	int delete_redundant_points(bool verbose=false) {
 
 		// indexing vars
 		unsigned index;
@@ -359,6 +360,12 @@ public:
 		unsigned nvertices_tmp;
 		unsigned max_loops = 10;
 		unsigned cnt = 0;
+		int ret;
+
+		// let's switch off output by default
+		if(verbose == false) {
+			_parm.msg_lev = GLP_MSG_ERR; // only error
+		}
 
 		// used to temporarily save the coordinates of a point 
 		vector<double> y (_dim, 0.);
@@ -382,16 +389,22 @@ public:
 					it = find(it+1, _ia.end(), point);
 				}
 
-				//temporarily set the i-th row to zero (remove the constraint corresponding to the vertex candidate)
+				// temporarily set the i-th row to zero (remove the constraint corresponding to the vertex candidate)
 				glp_set_mat_row(_lp, point, 0, NULL, NULL);
-				// if(glp_bf_exists(_lp) == 0) {
-				// 	if(glp_factorize(_lp) != 0)  {
-						glp_std_basis(_lp);
-				// 	}
-				// }
+
 
 				// now check if our point is in the convex hull of all the other points
-				check_point(y);
+				ret = check_point(y);
+				if(ret != 0) {
+					cerr << "Error: LP solving process was not successful for point #" << point << endl;
+					return ret;
+				}
+
+				ret = get_status();
+				if((ret != GLP_FEAS) && (ret != GLP_OPT)) {
+					cerr << "Error: Couldn't find a feasible solution for point #" << point << endl;
+					return ret;
+				}
 
 				// check result and delete if necessary
 				if(get_result() > 0){
@@ -406,7 +419,6 @@ public:
 					delete_point(point);
 
 					// do not increase point, since it refers now to the next index
-
 					cout << "Deleted point #" << point << endl;
 				}
 			}
@@ -415,23 +427,32 @@ public:
 
 		} while( (nvertices_tmp != _nvertices) && (cnt < max_loops) );
 
-		return _nvertices;
+		if(cnt >= max_loops) {
+			cerr << "Warning: Reached maximum number of iterations." << endl;
+		}
+
+		// message level back to normal
+		_parm.msg_lev = GLP_MSG_ALL;
+
+		return 0;
 	}
 
 
 	// get methods
 	double get_result() {
-		if(_method == "simplex")
-			return glp_get_obj_val(_lp);
-		else
-			return glp_ipt_obj_val(_lp);
+		return glp_get_obj_val(_lp);
+		// if(_method == "simplex")
+		// 	return glp_get_obj_val(_lp);
+		// else
+		// 	return glp_ipt_obj_val(_lp);
 	}
 
 	int get_status() {
-		if(_method == "simplex")
-			return glp_get_status(_lp);
-		else
-			return glp_ipt_status(_lp);
+		return glp_get_status(_lp);
+		// if(_method == "simplex")
+		// 	return glp_get_status(_lp);
+		// else
+		// 	return glp_ipt_status(_lp);
 	}
 
 	unsigned get_nvertices() {
@@ -454,7 +475,7 @@ public:
 			fout.close();
 		}
 		else {
-			cout << "Error in GLPKConvexSeperation::write_constraint_matrix : Couldn't open file " + outfile + " for writing" << endl;
+			cout << "Error in GLPKConvexSeparation::write_constraint_matrix : Couldn't open file " + outfile + " for writing" << endl;
 		}
 	}
 };

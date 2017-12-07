@@ -4,7 +4,7 @@
 #include <map>
 #include <tclap/CmdLine.h>
 
-#include "ConvexSeperation.h"
+#include "ConvexSeparation.h"
 #include "noise.h"
 
 using namespace std;
@@ -83,13 +83,15 @@ try {
 // ----- prepare computation
 // ----------------------------------
 
-GLPKConvexSeperation lp (dimension, cmatrix_file);
+GLPKConvexSeparation lp (dimension, cmatrix_file);
 lp.set_method(method);
 int ret_status;
 
 cout << "Initital number of vertices: " << lp.get_nvertices() << endl;
 
-cout << "Number of non-redundant vertices: " << lp.delete_redundant_points() << endl;
+lp.delete_redundant_points();
+
+cout << "Number of non-redundant vertices: " <<  lp.get_nvertices()  << endl;
 
 lp.write_constraint_matrix(outfile);
 

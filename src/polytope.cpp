@@ -4,7 +4,7 @@
 #include <map>
 #include <tclap/CmdLine.h>
 
-#include "ConvexSeperation.h"
+#include "ConvexSeparation.h"
 #include "noise.h"
 
 using namespace std;
@@ -162,7 +162,7 @@ try {
 // ----- prepare computation
 // ----------------------------------
 
-GLPKConvexSeperation lp (number_of_vertices, dimension, cmatrix_file);
+GLPKConvexSeparation lp (number_of_vertices, dimension, cmatrix_file);
 lp.set_method(method);
 int ret_status;
 
