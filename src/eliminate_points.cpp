@@ -1,11 +1,8 @@
 #include <iostream>
-#include <glpk.h>
 #include <fstream>
-#include <map>
 #include <tclap/CmdLine.h>
 
-#include "ConvexSeparation.h"
-#include "noise.h"
+#include "GLPKConvexSeparation.h"
 
 using namespace std;
 
@@ -30,9 +27,6 @@ string outfile;
 string method;
 bool Quiet;
 
-int dimension; // ambient dimension of the embedded polytope
-int number_of_vertices;
-
 
 try {
 
@@ -46,11 +40,6 @@ try {
 	TCLAP::ValueArg<string> output_arg ("o", "outfile", "Output file name that will be used for writing the reduced constraint matrix", false, "out.dat", "string");
 	cmd.add(output_arg);
 
-	TCLAP::ValueArg<int> vertices_arg ("v", "vertices", "Number of vertices of the polytope", false, 0, "Positive integer. By default, this will be deduced from the input file.");
-	cmd.add(vertices_arg);
-
-	TCLAP::ValueArg<int> dim_arg ("d", "dimension", "Ambient dimension of the polytope", true, 0, "Positive integer. By default, this will be set to 4^(nqbits+1)-1.");
-	cmd.add(dim_arg);
 
 	TCLAP::SwitchArg Quiet_arg ("Q","Quiet","Suppress detailed output to files", cmd, false);
 
@@ -63,16 +52,9 @@ try {
 
 	cmatrix_file = input_arg.getValue();
 	outfile = output_arg.getValue();
-	number_of_vertices = vertices_arg.getValue();
-	dimension = dim_arg.getValue();
 	method = method_arg.getValue();
 	Quiet = Quiet_arg.getValue();
 
-
-	if(number_of_vertices < 0) {
-		cerr << "Error: Number of vertices is smaller than 0." << endl;
-		return 1;
-	} 
 
 
 } catch (TCLAP::ArgException &e) { 
@@ -83,15 +65,16 @@ try {
 // ----- prepare computation
 // ----------------------------------
 
-GLPKConvexSeparation lp (dimension, cmatrix_file);
+GLPKConvexSeparation lp (cmatrix_file);
 lp.set_method(method);
+lp.set_verbosity(1);
 int ret_status;
 
-cout << "Initital number of vertices: " << lp.get_nvertices() << endl;
-
+lp.print_parameters();
+unsigned nvertices = lp.get_nvertices();
 lp.delete_redundant_points();
-
-cout << "Number of non-redundant vertices: " <<  lp.get_nvertices()  << endl;
+cout << "Deleted " << nvertices - lp.get_nvertices() << " points." << endl;
+lp.print_parameters();
 
 lp.write_constraint_matrix(outfile);
 

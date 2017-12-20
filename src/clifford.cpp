@@ -1,10 +1,8 @@
 #include <iostream>
-#include <glpk.h>
 #include <fstream>
-#include <map>
 #include <tclap/CmdLine.h>
 
-#include "ConvexSeparation.h"
+#include "GLPKConvexSeparation.h"
 #include "noise.h"
 
 using namespace std;
@@ -45,8 +43,6 @@ string method;
 bool Quiet;
 
 int dimension; // = pow(4, number_of_qubits + 1) - 1; // ambient dimension of the embedded polytope
-int number_of_vertices; // = 314
-
 
 try {
 
@@ -85,9 +81,6 @@ try {
 	TCLAP::ValueArg<unsigned> citer_arg ("i", "iterations", "Number of circuits the generate", false, 10, "Positive integer");
 	cmd.add(citer_arg);
 
-	TCLAP::ValueArg<int> vertices_arg ("v", "vertices", "Number of vertices of the polytope", false, 0, "Positive integer. By default, this will be deduced from the input file.");
-	cmd.add(vertices_arg);
-
 	TCLAP::ValueArg<int> dim_arg ("d", "dimension", "Ambient dimension of the polytope", false, 0, "Positive integer. By default, this will be set to 4^(nqbits+1)-1.");
 	cmd.add(dim_arg);
 
@@ -109,7 +102,6 @@ try {
 	nlower = cnum1_arg.getValue();
 	nupper = cnum2_arg.getValue();
 	niter = citer_arg.getValue();
-	number_of_vertices = vertices_arg.getValue();
 	dimension = dim_arg.getValue();
 	eps = eps_arg.getValue();
 	method = method_arg.getValue();
@@ -145,11 +137,6 @@ try {
 		return 1;
 	} 
 
-	if(number_of_vertices < 0) {
-		cerr << "Error: Number of vertices is smaller than 0." << endl;
-		return 1;
-	} 
-
 	if(dimension <= 0) {
 		dimension = pow(4,number_of_qubits+1)-1;
 	} 
@@ -162,16 +149,29 @@ try {
 // ----- prepare computation
 // ----------------------------------
 
-GLPKConvexSeparation lp (number_of_vertices, dimension, cmatrix_file);
+GLPKConvexSeparation lp (cmatrix_file);
 lp.set_method(method);
+lp.set_verbosity(1);
 int ret_status;
 
+// print parameters
+lp.print_parameters();
+
+
+// ----- only depolarising noise
+// DepolarisingNoiseFourier dp_noise(2);
+
+// // representation of noisy channel
+// NoisyTChannel y(2, &dp_noise);
+
+
+// ----- new stuff
 
 // noise model to use
-DepolarisingNoise dp_noise(2);
+DepolarisingNoiseFourier dp_noise(2);
 
 // configure circuit 
-CliffordCircuit2Q circuit_gen;
+CliffordCircuitFourier2Q circuit_gen;
 
 if(circuit.size() != 0) 
 	circuit_gen.set_circuit(circuit);
@@ -181,9 +181,10 @@ else
 circuit_gen.set_elemental_noise(&dp_noise);
 
 // representation of noisy channel
-// NoisyTChannel y(2, &circuit_gen);
-NoisyTChannel2Q y(&circuit_gen);
+NoisyTChannel y(2, &circuit_gen);
 
+
+// ----- old mathematica stuff
 
 // // noise model to use
 // DepolarisingNoise2Q dp_noise;

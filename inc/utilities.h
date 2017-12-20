@@ -6,9 +6,13 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <random>
+#include <eigen3/Eigen/Sparse>
+#include <tuple>
 
 
 using namespace std;
+using namespace Eigen;
 
 /* Utilities header file 
 	For usage with the noise propagation code. 
@@ -19,6 +23,32 @@ using namespace std;
 	Furthermore, the code uses at least the C++14 standard.
 */
 
+
+// ----- helpers
+
+// samples a random discrete probability distribution of length n
+// corresponds to sampling a random point out of the (n-1)-simplex
+vector<double> random_distribution(unsigned n) {
+	random_device rd; 
+	mt19937 gen(rd()); 
+	uniform_real_distribution<> dist (0,1); // uniform distribution on [0,1]
+
+	vector<double> p(n);
+	double N = 0.;
+
+	// corresponds to n+1 random exponentially distributed numbers
+	for(unsigned i=0; i<n; i++) {
+		p.at(i) = - log(dist(gen)); 
+		N += p.at(i);
+	}
+
+	// normalise
+	for(unsigned i=0; i<n; i++) {
+		p.at(i) /= N;
+	}
+
+	return p;
+}
 
 
 // ----- indexing routines

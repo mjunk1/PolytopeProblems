@@ -17,8 +17,8 @@
 #include "symplectic.h"
 #endif
 
-#ifndef CONVEXSEPERATION_H
-#include "ConvexSeperation.h"
+#ifndef GLPKCONVEXSEPARATION_H
+#include "GLPKConvexSeparation.h"
 #endif
  
 
@@ -227,7 +227,7 @@ vector<double> noisyT(unsigned n, vector<double> &phat) {
 
 // ----- PSDistributionGenerator specialisations
 
-class DepolarisingNoise2Q: public PSDistributionGenerator {
+class DepolarisingNoise2Q: public PSDistributionGeneratorReal {
 public:
 	DepolarisingNoise2Q() {
 		this->_length = 16;
@@ -256,7 +256,7 @@ public:
 	}
 };
 
-class DepolarisingNoise: public PSDistributionGenerator {
+class DepolarisingNoise: public PSDistributionGeneratorReal {
 protected:
 	unsigned _n; // number of qubits
 public:
@@ -284,15 +284,15 @@ public:
 	}
 };
 
-class DepolarisingNoiseHat: public PSDistributionGenerator {
+class DepolarisingNoiseFourier: public PSDistributionGeneratorFourier {
 protected:
 	unsigned _n; // number of qubits
 public:
-	DepolarisingNoiseHat() {
-		DepolarisingNoiseHat(1);
+	DepolarisingNoiseFourier() {
+		DepolarisingNoiseFourier(1);
 	}
 
-	DepolarisingNoiseHat(unsigned n) {
+	DepolarisingNoiseFourier(unsigned n) {
 		_n = n;
 		this->_length = pow(2,2*_n);
 	}
@@ -313,10 +313,10 @@ public:
 };
 
 
-class CliffordCircuit2Q:  public PSDistributionGenerator {
+class CliffordCircuit2Q:  public PSDistributionGeneratorReal {
 protected:
 	// elemental noise at every position in the circuit
-	PSDistributionGenerator *_elemental_noise = nullptr;
+	PSDistributionGeneratorReal *_elemental_noise = nullptr;
 
 	// Parameters used for random circuit generation
 	// We use a Marsenne-Twister generator which is seeded by a random_device 
@@ -330,11 +330,16 @@ protected:
 	// Clifford gates
 
 	// symplectic representations of elementary channels
-	unsigned _H1[4] = { 0b1100, 0b0100, 0b0010, 0b0001 };
-	unsigned _H2[4] = { 0b1000, 0b0100, 0b0011, 0b0001 };
-	unsigned _S1[4] = { 0b0100, 0b1000, 0b0010, 0b0001 };
-	unsigned _S2[4] = { 0b1000, 0b0100, 0b0001, 0b0010 };
-	unsigned _CNOT[4] = { 0b1010, 0b0110, 0b0010, 0b1101 };
+	// unsigned _H1[4] = { 0b1100, 0b0100, 0b0010, 0b0001 };
+	// unsigned _H2[4] = { 0b1000, 0b0100, 0b0011, 0b0001 };
+	// unsigned _S1[4] = { 0b0100, 0b1000, 0b0010, 0b0001 };
+	// unsigned _S2[4] = { 0b1000, 0b0100, 0b0001, 0b0010 };
+	// unsigned _CNOT[4] = { 0b1010, 0b0110, 0b0010, 0b1101 };
+	unsigned _H1[4] = { 0b0100, 0b1000, 0b0010, 0b0001 }; // H1
+	unsigned _H2[4] = { 0b1000, 0b0100, 0b0001, 0b0010 }; // H2
+	unsigned _S1[4] = { 0b1100, 0b0100, 0b0010, 0b0001 }; // S1
+	unsigned _S2[4] = { 0b1000, 0b0100, 0b0011, 0b0001 }; // S2
+	unsigned _CNOT[4] = { 0b1010, 0b0100, 0b0010, 0b0101 }; // CNOT
 	unsigned _ID[4] = { 0b1000, 0b0100, 0b0010, 0b0001 };
 
 	// making the gate access a bit easier
@@ -356,7 +361,7 @@ public:
 		_gate_order.resize(_circuit_length);
 	}
 
-	CliffordCircuit2Q(PSDistributionGenerator *gen): CliffordCircuit2Q() {
+	CliffordCircuit2Q(PSDistributionGeneratorReal *gen): CliffordCircuit2Q() {
 		set_elemental_noise(gen);
 	}
 
@@ -374,12 +379,12 @@ public:
 		_gate_order.resize(_circuit_length);
 	}
 
-	CliffordCircuit2Q(unsigned circuit_length, double cnot_prob, PSDistributionGenerator *gen): CliffordCircuit2Q(circuit_length, cnot_prob) {
+	CliffordCircuit2Q(unsigned circuit_length, double cnot_prob, PSDistributionGeneratorReal *gen): CliffordCircuit2Q(circuit_length, cnot_prob) {
 		set_elemental_noise(gen);
 	}
 
 	// set elemental noise
-	void set_elemental_noise(PSDistributionGenerator *gen) {
+	void set_elemental_noise(PSDistributionGeneratorReal *gen) {
 		assert(gen->get_length() == 16);
 		_elemental_noise = gen;
 	}
@@ -437,10 +442,10 @@ public:
 	}	
 };
 
-class CliffordCircuitHat2Q:  public PSDistributionGenerator {
+class CliffordCircuitFourier2Q:  public PSDistributionGeneratorFourier {
 protected:
 	// elemental noise at every position in the circuit
-	PSDistributionGenerator *_elemental_noise = nullptr;
+	PSDistributionGeneratorFourier *_elemental_noise = nullptr;
 
 	// Parameters used for random circuit generation
 	// We use a Marsenne-Twister generator which is seeded by a random_device 
@@ -454,11 +459,11 @@ protected:
 	// Clifford gates
 
 	// symplectic representations of elementary channels
-	unsigned _H1[4] = { 0b1100, 0b0100, 0b0010, 0b0001 };
-	unsigned _H2[4] = { 0b1000, 0b0100, 0b0011, 0b0001 };
-	unsigned _S1[4] = { 0b0100, 0b1000, 0b0010, 0b0001 };
-	unsigned _S2[4] = { 0b1000, 0b0100, 0b0001, 0b0010 };
-	unsigned _CNOT[4] = { 0b1010, 0b0110, 0b0010, 0b1101 };
+	unsigned _H1[4] = { 0b0100, 0b1000, 0b0010, 0b0001 }; // H1
+	unsigned _H2[4] = { 0b1000, 0b0100, 0b0001, 0b0010 }; // H2
+	unsigned _S1[4] = { 0b1100, 0b0100, 0b0010, 0b0001 }; // S1
+	unsigned _S2[4] = { 0b1000, 0b0100, 0b0011, 0b0001 }; // S2
+	unsigned _CNOT[4] = { 0b1010, 0b0100, 0b0010, 0b0101 }; // CNOT
 	unsigned _ID[4] = { 0b1000, 0b0100, 0b0010, 0b0001 };
 
 	// making the gate access a bit easier
@@ -468,7 +473,7 @@ protected:
 
 public:
 	// default CTOR
-	CliffordCircuitHat2Q() {
+	CliffordCircuitFourier2Q() {
 		this->_length = 16;
 
 		_circuit_length = 1;
@@ -480,12 +485,12 @@ public:
 		_gate_order.resize(_circuit_length);
 	}
 
-	CliffordCircuitHat2Q(PSDistributionGenerator *gen): CliffordCircuitHat2Q() {
+	CliffordCircuitFourier2Q(PSDistributionGeneratorFourier *gen): CliffordCircuitFourier2Q() {
 		set_elemental_noise(gen);
 	}
 
 	// CTOR which prepares for random circuit generation
-	CliffordCircuitHat2Q(unsigned circuit_length, double cnot_prob) {
+	CliffordCircuitFourier2Q(unsigned circuit_length, double cnot_prob) {
 		this->_length = 16;
 
 		// cnot_prob is used to generate the distribution. It is assumed that H and S gates occur with the same probability
@@ -498,12 +503,12 @@ public:
 		_gate_order.resize(_circuit_length);
 	}
 
-	CliffordCircuitHat2Q(unsigned circuit_length, double cnot_prob, PSDistributionGenerator *gen): CliffordCircuitHat2Q(circuit_length, cnot_prob) {
+	CliffordCircuitFourier2Q(unsigned circuit_length, double cnot_prob, PSDistributionGeneratorFourier *gen): CliffordCircuitFourier2Q(circuit_length, cnot_prob) {
 		set_elemental_noise(gen);
 	}
 
 	// set elemental noise
-	void set_elemental_noise(PSDistributionGenerator *gen) {
+	void set_elemental_noise(PSDistributionGeneratorFourier *gen) {
 		assert(gen->get_length() == 16);
 		_elemental_noise = gen;
 	}
@@ -568,10 +573,10 @@ public:
 class NoisyTChannel2Q: public PointGenerator {
 protected:
 	vector<double> _ps_dist;
-	PSDistributionGenerator *_ps_gen;
+	PSDistributionGeneratorReal *_ps_gen;
 
 public:
-	NoisyTChannel2Q(PSDistributionGenerator *gen) {
+	NoisyTChannel2Q(PSDistributionGeneratorReal *gen) {
 		set_ps_generator(gen);
 	}
 
@@ -580,7 +585,7 @@ public:
 		return noisyT_2Q(_ps_dist.data());
 	}
 
-	void set_ps_generator(PSDistributionGenerator *gen) {
+	void set_ps_generator(PSDistributionGeneratorReal *gen) {
 		assert(gen->get_length() == 16);
 		_ps_gen = gen;
 	}
@@ -590,11 +595,11 @@ public:
 class NoisyTChannel: public PointGenerator {
 protected:
 	vector<double> _ps_dist;
-	PSDistributionGenerator *_ps_gen = nullptr;
+	PSDistributionGeneratorFourier *_ps_gen = nullptr;
 	unsigned _n;
 
 public:
-	NoisyTChannel(unsigned n, PSDistributionGenerator *gen) {
+	NoisyTChannel(unsigned n, PSDistributionGeneratorFourier *gen) {
 		_n = n;
 		set_ps_generator(gen);
 	}
@@ -605,7 +610,7 @@ public:
 		return noisyT(_n, _ps_dist);
 	}
 
-	void set_ps_generator(PSDistributionGenerator *gen) {
+	void set_ps_generator(PSDistributionGeneratorFourier *gen) {
 		assert(gen->get_length() == pow(4,_n));
 		_ps_gen = gen;
 	}
