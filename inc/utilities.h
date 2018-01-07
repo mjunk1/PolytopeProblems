@@ -110,6 +110,10 @@ unsigned get_linear_index(const unsigned arr_dim, const unsigned* arr_ranges, co
 	return get_linear_index(arr_dim, arr_ranges, const_cast<unsigned* >(indices.begin()));
 }
 
+unsigned get_linear_index(const unsigned arr_dim, const initializer_list<unsigned> arr_ranges, const initializer_list<unsigned> indices){
+	return get_linear_index(arr_dim, const_cast<unsigned* >(arr_ranges.begin()), const_cast<unsigned* >(indices.begin()));
+}
+
 // overloads where all N_i are assumed to be the same
 unsigned get_linear_index(const unsigned arr_dim, const unsigned arr_range, const unsigned* indices) {
 	vector<unsigned> vec (arr_dim, arr_range);
@@ -119,6 +123,18 @@ unsigned get_linear_index(const unsigned arr_dim, const unsigned arr_range, cons
 unsigned get_linear_index(const unsigned arr_dim, const unsigned arr_range, const initializer_list<unsigned> indices) {
 	vector<unsigned> vec (arr_dim, arr_range);
 	return get_linear_index(arr_dim, vec.data(), const_cast<unsigned* >(indices.begin()));
+}
+
+
+// indexing for symmetric matrices
+// only the lower triangular part is stored
+unsigned get_symmetric_index(const unsigned i, const unsigned j) {
+	if(i >= j) {
+		return (j + i*(i+1)/2);
+	}
+	else {
+		return (i + j*(j+1)/2);
+	}
 }
 
 

@@ -152,6 +152,7 @@ try {
 GLPKConvexSeparation lp (cmatrix_file);
 lp.set_method(method);
 lp.set_verbosity(1);
+lp.set_parameters(nlower,nupper,50,eps);
 int ret_status;
 
 // print parameters
@@ -210,7 +211,7 @@ NoisyTChannel y(2, &circuit_gen);
 
 // solve & write solution
 double pth = lp.check_family(y);
-cout << "Threshold value p_th = " << pth << endl;
+cout << "Threshold value p_th = " << setprecision((int)(-log10(eps))) << pth << endl;
 
 
 }

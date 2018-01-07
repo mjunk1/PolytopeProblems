@@ -13,24 +13,97 @@ using namespace std;
 
 int main(int argc, char** argv) {
 
-	unsigned n = 2;
+	unsigned n = 4;
 	unsigned m = n;
-	unsigned samples = 200;
+	unsigned samples = 20;
 	random_device rd; 
 	mt19937 gen(rd()); 
 	uniform_int_distribution<> dist;
 	unsigned x,y,z;
 
-	// ----- test of matrix functions
+	// ----- test of linear algebra functions
 
-	// cout << "=================================================" << endl;
-	// cout << "===   Start testing of matrix functions" << endl;
-	// cout << "=================================================" << endl;
+	cout << "=================================================" << endl;
+	cout << "===   Start testing of linear algebra functions" << endl;
+	cout << "=================================================" << endl;
 
-	// random_device rd; 
-	// mt19937 gen(rd()); 
-	// dist = uniform_int_distribution<> (0, pow(4,n)-1);
+	// generate random phase space point
+	dist = uniform_int_distribution<> (0, pow(4,n)-1);
+
+	cout << "Coordinate transformations" << endl;
+	cout << "--------------------------" << endl;
+
+	for(unsigned s=0; s<samples; s++) {
+		x = dist(gen);
+		cout << write_bits(x, 2*n) << " --> " << write_bits(zx_to_product_coordinates(x,n), 2*n) << endl;
+	}
 	
+	cout << endl;
+
+	cout << "Generation of graph states" << endl;
+	cout << "--------------------------" << endl;
+
+	vector<unsigned> G(n);
+	dist = uniform_int_distribution<> (0, pow(2,n*(n+1)/2)-1);
+	
+
+	for(unsigned s=0; s<samples; s++) {
+		unsigned i = dist(gen);
+		G = generate_gs_Lagrangian(i, n);
+
+		cout << "Generated the following Lagrangian basis:" << endl;
+		for(unsigned j=0; j<n; j++) {
+			cout << "    " <<  write_bits(G[j], 2*n) << endl;
+		}
+
+		// test if it's really Lagrangian
+		for(unsigned j=0; j<n; j++) {
+			if(!in_Lagrangian(G[j],G,n)) {
+				cerr << "Error: Lagrangian test not passed for graph state #" <<  i << endl;
+				break;
+			}
+			else {
+				cerr << "Lagrangian test passed for graph state #" <<  i << endl;
+			}
+		}
+		
+	}
+
+
+	cout << endl;
+
+	cout << "Generation of stabiliser states" << endl;
+	cout << "-------------------------------" << endl;
+
+
+	// single qubit
+	n = 1;
+	vector<double> state;
+
+	// There are two graph states for n=1 
+	for(unsigned k=0; k< pow(2,n*(n+1)/2); k++) {
+		G = generate_gs_Lagrangian(k, n);
+		cout << "Generated the following Lagrangian basis:" << endl;
+		for(unsigned j=0; j<n; j++) {
+			cout << "    " <<  write_bits(G[j], 2*n) << endl;
+		}
+
+		cout << "Generated the following stabiliser states corresponding to this Lagrangian:" << endl;
+
+		for(unsigned s=0; s<pow(2,n); s++) {
+			state = generate_stabiliser_state(G, s);
+			cout << "    ";
+			for(auto st : state) {
+				cout << st << " ";
+			}
+			cout << endl;
+		}
+	}
+
+	for(unsigned m=1; m<5; m++) {
+		vector<vector<double>> states = generate_stabiliser_states(m);
+	}
+
 
 	// vector<unsigned> A1 (2*n);
 	// vector<unsigned> A2 (2*m);
@@ -60,6 +133,7 @@ int main(int argc, char** argv) {
 	// 	cout << "     " << write_bits(S.at(j),2*n+2*m) << endl; 
 	// }
 
+	return 0; 
 
 	// ----- test of transvections
 
