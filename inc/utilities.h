@@ -51,6 +51,46 @@ vector<double> random_distribution(unsigned n) {
 }
 
 
+// linear algebra
+// to be replaced with BLAS
+vector<double> matrix_vector_prod(vector<double> A, const vector<double> x) {
+	unsigned N = x.size(); // N = 4^n
+	unsigned M = A.size()/N;
+	vector<double> y(M,0);
+
+	// transform
+	for(unsigned i=0; i<M; i++) {
+		for(unsigned j=0; j<N; j++) {
+			y.at(i) += A.at(N*i+j)*x.at(j);
+		}
+	}
+
+	return y;
+}
+
+unsigned factorial(const unsigned n) {
+	unsigned f = 1;
+	for(unsigned nn=n; nn>0; --nn) {
+		f *= nn;
+	}
+	return f;
+}
+
+unsigned binomial_coeff(const unsigned n, const unsigned k) {
+    vector<unsigned> C(k+1,0);
+ 
+    C[0] = 1;
+ 
+    for (unsigned i = 1; i <= n; i++) {
+        // Compute next row of pascal triangle using
+        // the previous row
+        for (unsigned j = min(i, k); j > 0; j--)
+            C[j] = C[j] + C[j-1];
+    }
+    return C[k];
+}
+
+
 // ----- indexing routines
 
 /* Computes the multi index for a given linear index assuming row-major order 

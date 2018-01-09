@@ -42,10 +42,6 @@ double dn_hat_1Q(double p, unsigned a) {
 }
 
 
-// Liouville-Pauli representation of noisy T channels
-
-vector<double> Tmatrix = {1,0,0,0,0,1/sqrt(2),0,-1/sqrt(2),0,0,1,0,0,1/sqrt(2),0,1/sqrt(2)};
-
 // T + random Pauli noise
 int noisyT_1Q(double *p, double *y) {
 	y[0] = p[0] - p[1] + p[2] - p[3];

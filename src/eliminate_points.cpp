@@ -6,15 +6,6 @@
 
 using namespace std;
 
-/* input to the program:
-
-	* number of qubits
-	* constraint matrix consisting of the coordinates of the polytope vertices, specified in some data file
-
-*/
-
-
-
 
 int main(int argc, char** argv) {
 
@@ -30,7 +21,7 @@ bool Quiet;
 
 try {
 
-	TCLAP::CmdLine cmd("Program for solving the membership problem for the Clifford polytope", ' ', "0.1");
+	TCLAP::CmdLine cmd("Program for eliminating redundant points from the convex hull of a set of points.", ' ', "0.1");
 
 	// arguments
 
@@ -62,7 +53,7 @@ try {
 }
 
 // ----------------------------------
-// ----- prepare computation
+// ----- elimination
 // ----------------------------------
 
 GLPKConvexSeparation lp (cmatrix_file);
@@ -78,14 +69,6 @@ lp.print_parameters();
 
 lp.write_constraint_matrix(outfile);
 
-
-// ----------------------------------
-// ------ start computation
-// ----------------------------------
-
-// solve & write solution
-// double pth = lp.check_family(y);
-// cout << "Threshold value p_th = " << pth << endl;
 
 
 }

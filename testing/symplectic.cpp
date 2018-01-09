@@ -2,9 +2,11 @@
 #include <fstream>
 #include <vector>
 #include <random>
+#include <set>
 
 #include "symplectic.h"
 #include "utilities.h"
+#include "stabiliser.h"
 
 
 using namespace std;
@@ -75,35 +77,80 @@ int main(int argc, char** argv) {
 	cout << "Generation of stabiliser states" << endl;
 	cout << "-------------------------------" << endl;
 
+	for(unsigned m=1; m<3; m++) {
+		cout << "Generate stabiliser states for n = " << m << endl;
+		vector<vector<double>> states = generate_stabiliser_states(m);
 
-	// single qubit
-	n = 1;
-	vector<double> state;
+		cout << "Compute projections ... ";
+		vector<vector<double>> pr_states = project_states(states,m);
+		cout << "Found " << pr_states.size() << " images:" << endl;
 
-	// There are two graph states for n=1 
-	for(unsigned k=0; k< pow(2,n*(n+1)/2); k++) {
-		G = generate_gs_Lagrangian(k, n);
-		cout << "Generated the following Lagrangian basis:" << endl;
-		for(unsigned j=0; j<n; j++) {
-			cout << "    " <<  write_bits(G[j], 2*n) << endl;
-		}
-
-		cout << "Generated the following stabiliser states corresponding to this Lagrangian:" << endl;
-
-		for(unsigned s=0; s<pow(2,n); s++) {
-			state = generate_stabiliser_state(G, s);
-			cout << "    ";
-			for(auto st : state) {
-				cout << st << " ";
+		for(auto state : pr_states) {
+			for(auto x : state) {
+				cout << x << " ";
 			}
 			cout << endl;
 		}
+
+		cout << "Check if H is invariant under projection ... ";
+		if(project_state(H_state_rotated(m),m,false) == H_state_nb(m)) {
+			cout << "true." << endl;
+		}
+		else {
+			cout << endl;
+			cout << "\tError" << endl;
+
+			cout << "Projection is: " << endl;
+			for(auto x : project_state(H_state_rotated(m),m,false)) {
+				cout << x << " ";
+			}
+			cout << endl;
+
+			cout << "Should be:" << endl;
+			for(auto x : H_state_nb(m)) {
+				cout << x << " ";
+			}
+			cout << endl;
+
+			break;
+		}
+
+		cout << endl;
 	}
 
-	for(unsigned m=1; m<5; m++) {
-		vector<vector<double>> states = generate_stabiliser_states(m);
+	cout << "Test direct generation of projected states" << endl;
+	cout << "------------------------------------------" << endl;
+
+	for(unsigned m=1; m<4; m++) {
+		cout << "Generate projected stabiliser states for n = " << m << endl;
+
+		set<vector<double>> pr_states = generate_projected_stabiliser_states_set(m);
+
+		cout << "Found " << pr_states.size() << " images." << endl;
+
+		fstream fout ("pr_stab_states_"+to_string(m)+".dat", ios::out);
+
+		if(fout.is_open()) {
+			for(auto state : pr_states) {
+				for(auto x : state) {
+					fout << x << " ";
+				}
+				fout << endl;
+			}
+		}
+		fout.close();
+
+		cout << endl;
 	}
 
+
+
+
+
+	// auto iset = index_set(3,4);
+	// for(auto i : iset) {
+	// 	cout << write_bits(i,8) << endl;
+	// }
 
 	// vector<unsigned> A1 (2*n);
 	// vector<unsigned> A2 (2*m);
