@@ -1,14 +1,7 @@
-#ifndef GLPKCONVEXSEPERATION_H
-#define GLPKCONVEXSEPERATION_H
-#include <glpk.h>
-#include <fstream>
-#include <iostream>
+#ifndef GLPKL1MINIMISATION_H
+#define GLPKL1MINIMISATION_H
 #include <string>
 #include <vector>
-#include <cassert>
-#include <stdexcept>
-#include <algorithm>
-#include <eigen3/Eigen/Sparse>
 
 #ifndef GLPKFORMAT_H
 #include "GLPKFormat.h"
@@ -18,20 +11,50 @@
 #include "utilities.h"
 #endif
 
-#ifndef CONVEXSEPERATION_H
-#include "ConvexSeparation.h"
+#ifndef L1MINIMISATION_H
+#include "L1Minimisation.h"
 #endif
 
 using namespace std;
-using namespace Eigen;
-
 
 
 // ---------------------------------------
 // ----- GLPK specialisation
 // ---------------------------------------
 
-class GLPKConvexSeparation: public ConvexSeparation {
+
+class L1Minimisation {
+protected:
+	// size parameters
+	// unsigned _nvertices = 0;
+	unsigned _dim = 0;
+
+public:
+
+	// Constructors
+	L1Minimisation() { }
+
+	// Destructor
+	virtual ~L1Minimisation() { }
+
+	// abstract methods
+
+	// reading & allocation method
+	virtual int read_vertex_matrix(string cmatrix_file) = 0; 
+
+	// single point checking method
+	virtual int check_point(vector<double> &y) = 0;
+
+	// write solution to outfile
+	virtual void write_sol(string outfile) = 0;
+
+	virtual double get_obj_value() = 0;
+
+	virtual int get_status() = 0;
+};
+
+
+class GLPKL1Minimisation: public L1Minimisation {
 protected:
 	// size parameters
 	// unsigned _nvertices; 
@@ -46,12 +69,6 @@ protected:
 	int _glp_ret = 0;
 	vector<int> _ind;
 	string _method = "simplex";
-
-	// interval division parameters
-	double _lbnd = 0;
-	double _ubnd = 1;
-	unsigned _max_iter = 50;
-	double _precision = 1e-6;
 
 	// output
 	unsigned _verbose = 2;
@@ -75,7 +92,7 @@ protected:
 
 		// set up problem parameters
 		glp_set_prob_name(_lp, "Polytope membership");
-		glp_set_obj_dir(_lp, GLP_MAX);
+		glp_set_obj_dir(_lp, GLP_MIN);
 
 		string s;
 
@@ -128,12 +145,12 @@ protected:
 	}
 
 public:
-	GLPKConvexSeparation() {
+	GLPKL1Minimisation() {
 		// setting parameter struct to default values
 		glp_init_smcp(&_parm);
 	}
 
-	GLPKConvexSeparation(string cmatrix_file) {
+	GLPKL1Minimisation(string cmatrix_file) {
 		// reading vertex coordinates and parameters
 		if(read_vertex_matrix(cmatrix_file) != 0) {
 			exit (EXIT_FAILURE);
@@ -144,7 +161,7 @@ public:
 
 	}
 
-	GLPKConvexSeparation(SparseMatrix<double,RowMajor>& vertex_matrix) {
+	GLPKL1Minimisation(SparseMatrix<double,RowMajor>& vertex_matrix) {
 		// reading vertex coordinates and parameters
 		if(read_vertex_matrix(vertex_matrix) != 0) {
 			exit (EXIT_FAILURE);
@@ -156,7 +173,7 @@ public:
 	}
 
 	// Destructor
-	~GLPKConvexSeparation() {
+	~GLPKL1Minimisation() {
 		glp_delete_prob(_lp);
 	}
 
@@ -203,165 +220,6 @@ public:
 
 		return _glp_ret;
 	}
-
-	double check_family(PointGenerator &y) {
-		// Note: This function should check for the correct "search direction" first. I.e. it has to identify which endpoint of the curve lies inside the polytope and which one lies outside. This is needed in order to correctly search of the intersection point parameter in the search interval [_lbnd, _ubnd].
-		// Another note: There is certainly a smarter way to do this, too. This method can only handle a curve which starts outside the polytope, ends in the polytope and has only one intersection point with its boundary. That's enough for now, but for more general scenarios, this strategy has to be changed (e.g. starting from one endpoint and approaching the intersection point. As soon as it is passed, start interval division to find the precise location.)
-
-		// initialize variables for interval division method
-		double p1r = _ubnd;
-		double p1l = _lbnd;
-		double p0m = 0;
-		double p1m = fabs(_ubnd + _lbnd)/2.;
-		unsigned iter_counter = 0;
-		vector<double> yy;
-
-		// loop until desired accuracy is reached
-		while( fabs(p1m-p0m) > _precision && iter_counter < _max_iter ) {
-			
-			if(_verbose >= 2)
-				cout << "Solving convex seperation problem for y(p) with p = " << p1m << endl;
-
-			// generate and check point
-			yy = y(p1m);
-			check_point(yy);
-
-			// set new interval
-			if(get_obj_value() > 0) {
-				// left of the optimal value
-				p1l = p1m;
-				p0m = p1m;
-				p1m = fabs(p1r + p1l)/2.;
-
-			} else {
-				// right of the optimal value
-				p1r = p1m;
-				p0m = p1m;
-				p1m = fabs(p1r + p1l)/2.;
-			}
-
-			++iter_counter;
-
-			if(_verbose >= 2)
-				cout << "-------------------------------------------------------------------" << endl;
-		}
-
-		if(iter_counter == _max_iter) {
-			if(_verbose >= 1)
-				cerr << "Maximum number of iterations reached (max = " << _max_iter << ")" << endl;
-		}
-		else if(fabs(p1m-p0m) > _precision) {
-			if(_verbose >= 1)
-				cerr << "Could not achieve required precision. Precision estimate = " << fabs(p1m-p0m) << endl;
-		}
-		else{
-			if(_verbose >= 2)
-				cout << "Converged to required precision." << endl;
-		}
-
-		return p1m;
-	}
-
-	void delete_point(unsigned number) {
-		assert(number < get_nvertices());
-
-		const int nums[] = {0, (int)(number+1)};
-		glp_del_rows(_lp, 1, nums);
-	}
-
-	int delete_redundant_points(unsigned max_loops=1) {
-		// Checks the generating set of the polytope for redundant points and deletes them. The remaining set consists of the vertices.
-		//
-		// If the parameter max_loops is given, the elimination procedure is repeated up to max_loops times until the number of points stabilises. This is just for testing purposes, since the algorithm should give the correct set of points after the first run.
-
-		// indexing vars
-		unsigned index;
-		unsigned point;
-		unsigned nvertices_tmp;
-		unsigned nvertices_init = get_nvertices();
-		unsigned cnt = 0;
-		int ret;
-
-
-		// used to temporarily save the coordinates of a point 
-		vector<double> y (_dim, 0.);
-
-		do {
-			nvertices_tmp = get_nvertices();
-			point = 0;
-
-			while (point < get_nvertices()) {
-				
-				y = get_vertex(point);
-
-				// temporarily set the i-th row to zero (remove the constraint corresponding to the vertex candidate)
-				glp_set_mat_row(_lp, point+1, 0, NULL, NULL);
-
-
-				// now check if our point is in the convex hull of all the other points
-				ret = check_point(y);
-
-				// note that the member _y now contains the row corresponding to y
-
-				if(ret != 0) {
-					if(_verbose >= 1) {
-						cerr << "Error: LP solving process was not successful for point #" << point << endl;
-					}
-
-					// restore row
-					glp_set_mat_row(_lp, point+1, _dim+1, _ind.data(), _y.data());
-
-					return ret;
-				}
-
-				ret = get_status();
-				if((ret != GLP_FEAS) && (ret != GLP_OPT)) {
-					if(_verbose >= 1) {
-						cerr << "Error: Couldn't find a feasible solution for point #" << point << endl;
-					}
-
-					// restore row
-					glp_set_mat_row(_lp, point+1, _dim+1, _ind.data(), _y.data());
-
-					return ret;
-				}
-
-				// check result and delete if necessary
-				if(get_obj_value() > 0){
-					// it is not redundant, restore row
-					glp_set_mat_row(_lp, point+1, _dim+1, _ind.data(), _y.data());	
-
-					// check the next point in the next loop
-					++point;
-				} 
-				else {
-					// it is redundant
-					delete_point(point);
-
-					// testing
-					// cerr << "Deleted point #" << point << " with objective value " << scientific << get_obj_value() << endl;
-
-					// do not increase point, since it refers now to the next index
-					if(_verbose >= 2){
-						cout << "Deleted point #" << point << endl;
-					}
-				}
-			}
-
-			++cnt;
-
-			// cout << "Reduced number of vertices: " << get_nvertices() << endl;
-
-		} while( (nvertices_tmp != get_nvertices()) && (cnt < max_loops) );
-
-		if(cnt >= max_loops && max_loops > 1 && _verbose >= 1) {
-			cerr << "Warning: Reached maximum number of iterations." << endl;
-		}
-
-
-		return 0;
-	}
-
 
 	// get methods
 	double get_obj_value() {
@@ -441,13 +299,6 @@ public:
 		_method = s;
 	}
 
-	int set_parameters(double lbnd = 0, double ubnd = 1, unsigned max_iter = 50, double precision = 1e-6) {
-		_lbnd = lbnd;
-		_ubnd = ubnd;
-		_max_iter = max_iter;
-		_precision = precision;
-	}
-
 
 	// output methods
 	void write_sol(string outfile) {
@@ -484,26 +335,16 @@ public:
 
 	void print_parameters() {
 		cout << "---------------------------------------" << endl;
-		cout << "GLPKConvexSeparation parameter output" << endl;
+		cout << "GLPKL1Minimisation parameter output" << endl;
 		cout << "---------------------------------------" << endl;
 
 		cout << "Problem parameters:" << endl;
 		cout << "  Dimension: " << get_dimension() << endl;
 		cout << "  Vertices: " << get_nvertices() << endl;
 		cout << "  Non-Zeros in the constraint matrix: " << get_nnz() << endl;
-
-		cout << "Convex seperation parameters:" << endl;
-		cout << "  Precision: " << _precision << endl;
-		cout << "  Maximal iterations: " << _max_iter << endl;
-		cout << "  Lower bound for interval division: " << _lbnd << endl;
-		cout << "  Upper bound for interval division: " << _ubnd << endl;
 		cout << "---------------------------------------" << endl;
 	}
 };
-
-
-
-
 
 
 #endif

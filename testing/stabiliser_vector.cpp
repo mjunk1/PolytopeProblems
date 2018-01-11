@@ -25,8 +25,6 @@ int main(int argc, char** argv) {
 		m = 1;
 	}
 
-	cout << m << endl;
-
 	cout << "Test direct generation of projected states" << endl;
 	cout << "------------------------------------------" << endl;
 

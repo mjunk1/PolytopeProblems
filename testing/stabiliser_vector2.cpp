@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
 	// timing
 	auto t1 = chrono::high_resolution_clock::now();
 
-	set<vector<double>> pr_states = generate_projected_stabiliser_states_set(m);
+	vector<vector<double>> pr_states = generate_projected_stabiliser_states_vector2(m, 4096);
 
 	auto t2 = chrono::high_resolution_clock::now();	
 

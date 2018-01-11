@@ -363,69 +363,7 @@ vector<vector<double>> project_states(vector<vector<double>> states, const unsig
 	return pr_states;
 }
 
-// this function is better suited since it needs exponentially less memory for the states to store.
-vector<vector<double>> generate_projected_stabiliser_states(const unsigned n) {
-	// estimated size (overcounted!)
-	unsigned N = pow(2,n*(n+1)/2);
-	unsigned M = pow(6,n);
-	unsigned S = pow(2,n);
-	unsigned size = N*M*S;
 
-	// needed later
-	vector<vector<double>> states ( size, vector<double> (n,0) );
-	vector<double> tmp_state (pow(4,n),0);
-	vector<unsigned> B;
-	vector<unsigned> SB (n);
-	vector<double> A = rotation_matrix(n);
-
-	// generate 1-qubit symplectic group
-	vector<vector<unsigned>> symp_group (6);
-
-	for(unsigned i=0; i<6; i++) {
-		symp_group.at(i) = generate_symplectic_matrix(i,1);
-	}
-
-	// generate local n-qubit symplectic group
-	vector<vector<unsigned>> loc_symp_group (M);
-	vector<unsigned> indices (n);
-	vector<vector<unsigned>> Slist (n);
-	for(unsigned i=0; i<M; i++) {
-		get_multi_index(n, 6, i, indices);
-		for(unsigned j=0; j<n; j++) {
-			Slist.at(j) = symp_group.at(indices.at(j));
-		}
-		loc_symp_group.at(i) = direct_sum(Slist);
-	}
-
-	// graph state loop
-	for(unsigned i=0; i<N; i++) {
-		B = generate_gs_Lagrangian(i,n);
-
-		// local symplectic orbit
-		for(unsigned j=0; j<M; j++) {
-			// transform the basis vectors with the j-th matrix
-			for(unsigned k=0; k<n; k++) {
-				SB.at(k) = matrix_vector_prod_mod2(loc_symp_group.at(j), B.at(k));
-			}
-
-			// generate stabiliser states for all possible sign choices and directly project them
-			for(unsigned s=0; s<S; s++) {
-				tmp_state = generate_stabiliser_state(SB, s);
-				states.at(get_linear_index(3,{N,M,S},{i,j,s})) = project_state(tmp_state, n, A);
-			}
-		}
-	}
-
-	// eliminate duplicates
-	sort(states.begin(), states.end());
-	auto last = unique(states.begin(), states.end());
-	int d = distance(last, states.end());
-	states.erase(last,states.end());
-
-	cout << "Found " << d << " duplicates. " << size-d << " elements left." << endl;
-
-	return states;
-}
 
 // this function uses std::set which requires less memory for the states to store.
 set<vector<double>> generate_projected_stabiliser_states_set(const unsigned n) {
@@ -552,6 +490,158 @@ vector<vector<double>> generate_projected_stabiliser_states_vector(const unsigne
 	}
 
 	return states;
+}
+
+
+// This function tries to balance time and space complexity by using a std::vector that consumes about mem_size memory. Every couple of iterations, duplicates are deleted from that vector.
+// mem_size should be given in MB
+vector<vector<double>> generate_projected_stabiliser_states_vector2(const unsigned n, const unsigned mem_size) {
+	// estimated size (overcounted!)
+	unsigned N = pow(2,n*(n+1)/2);
+	unsigned M = pow(6,n);
+	unsigned S = pow(2,n);
+
+	// estimate size of vector
+	// mem_size*1024/8 = number of doubles that one can store in that memory
+	unsigned size = mem_size*128 / n; 
+
+	// needed later
+	vector<vector<double>> states;
+	states.reserve(size);
+	vector<double> tmp_state (pow(4,n),0);
+	vector<double> tmp_state2 (n,0);
+	vector<unsigned> B;
+	vector<unsigned> SB (n);
+	vector<double> A = rotation_matrix(n);
+
+	// generate 1-qubit symplectic group
+	vector<vector<unsigned>> symp_group (6);
+
+	for(unsigned i=0; i<6; i++) {
+		symp_group.at(i) = generate_symplectic_matrix(i,1);
+	}
+
+	// generate local n-qubit symplectic group
+	vector<vector<unsigned>> loc_symp_group (M);
+	vector<unsigned> indices (n);
+	vector<vector<unsigned>> Slist (n);
+	for(unsigned i=0; i<M; i++) {
+		get_multi_index(n, 6, i, indices);
+		for(unsigned j=0; j<n; j++) {
+			Slist.at(j) = symp_group.at(indices.at(j));
+		}
+		loc_symp_group.at(i) = direct_sum(Slist);
+	}
+
+	// graph state loop
+	for(unsigned i=0; i<N; i++) {
+		B = generate_gs_Lagrangian(i,n);
+
+		// local symplectic orbit
+		for(unsigned j=0; j<M; j++) {
+			// transform the basis vectors with the j-th matrix
+			for(unsigned k=0; k<n; k++) {
+				SB.at(k) = matrix_vector_prod_mod2(loc_symp_group.at(j), B.at(k));
+			}
+
+			// generate stabiliser states for all possible sign choices and directly project them
+			// note that the state is only added if it not already exists in the set states.
+			for(unsigned s=0; s<S; s++) {
+				tmp_state = generate_stabiliser_state(SB, s);
+				tmp_state2 = project_state(tmp_state, n, A);
+
+				// add state to the list
+				states.push_back(tmp_state2);
+
+				// if list is at maximum, delete duplicates
+				if(states.size() == size) {
+					// sort it and erase states
+					sort(states.begin(), states.end());
+					auto last = unique(states.begin(), states.end());
+					states.erase(last,states.end());
+				}
+			}
+		}
+	}
+
+	sort(states.begin(), states.end());
+	auto last = unique(states.begin(), states.end());
+	states.erase(last,states.end());
+
+	states.shrink_to_fit();
+
+	return states;
+}
+
+// this function is better suited since it needs exponentially less memory for the states to store.
+vector<vector<double>> generate_projected_stabiliser_states_old(const unsigned n) {
+	// estimated size (overcounted!)
+	unsigned N = pow(2,n*(n+1)/2);
+	unsigned M = pow(6,n);
+	unsigned S = pow(2,n);
+	unsigned size = N*M*S;
+
+	// needed later
+	vector<vector<double>> states ( size, vector<double> (n,0) );
+	vector<double> tmp_state (pow(4,n),0);
+	vector<unsigned> B;
+	vector<unsigned> SB (n);
+	vector<double> A = rotation_matrix(n);
+
+	// generate 1-qubit symplectic group
+	vector<vector<unsigned>> symp_group (6);
+
+	for(unsigned i=0; i<6; i++) {
+		symp_group.at(i) = generate_symplectic_matrix(i,1);
+	}
+
+	// generate local n-qubit symplectic group
+	vector<vector<unsigned>> loc_symp_group (M);
+	vector<unsigned> indices (n);
+	vector<vector<unsigned>> Slist (n);
+	for(unsigned i=0; i<M; i++) {
+		get_multi_index(n, 6, i, indices);
+		for(unsigned j=0; j<n; j++) {
+			Slist.at(j) = symp_group.at(indices.at(j));
+		}
+		loc_symp_group.at(i) = direct_sum(Slist);
+	}
+
+	// graph state loop
+	for(unsigned i=0; i<N; i++) {
+		B = generate_gs_Lagrangian(i,n);
+
+		// local symplectic orbit
+		for(unsigned j=0; j<M; j++) {
+			// transform the basis vectors with the j-th matrix
+			for(unsigned k=0; k<n; k++) {
+				SB.at(k) = matrix_vector_prod_mod2(loc_symp_group.at(j), B.at(k));
+			}
+
+			// generate stabiliser states for all possible sign choices and directly project them
+			for(unsigned s=0; s<S; s++) {
+				tmp_state = generate_stabiliser_state(SB, s);
+				states.at(get_linear_index(3,{N,M,S},{i,j,s})) = project_state(tmp_state, n, A);
+			}
+		}
+	}
+
+	// eliminate duplicates
+	sort(states.begin(), states.end());
+	auto last = unique(states.begin(), states.end());
+	int d = distance(last, states.end());
+	states.erase(last,states.end());
+
+	cout << "Found " << d << " duplicates. " << size-d << " elements left." << endl;
+
+	return states;
+}
+
+
+// this function uses a sorted std::vector which requires less memory for the states to store and should be faster than std::set
+// however the advantage seems to diminuish for larger n
+vector<vector<double>> generate_projected_stabiliser_states(const unsigned n) {
+	return generate_projected_stabiliser_states_vector(n);
 }
 
 #endif

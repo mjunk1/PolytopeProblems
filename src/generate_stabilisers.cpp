@@ -2,6 +2,8 @@
 #include <fstream>
 #include <tclap/CmdLine.h>
 #include <algorithm>
+#include <chrono>
+
 
 #include "symplectic.h"
 #include "utilities.h"
@@ -55,10 +57,19 @@ try {
 cout << "Generate projected stabiliser states for n = " << n << endl;
 
 
-set<vector<double>> pr_states = generate_projected_stabiliser_states_set(n);
+// timing
+auto t1 = chrono::high_resolution_clock::now();
+
+// set<vector<double>> pr_states = generate_projected_stabiliser_states_set(n);
+vector<vector<double>> pr_states = generate_projected_stabiliser_states(n);
+
+auto t2 = chrono::high_resolution_clock::now();	
+
+chrono::duration<double, milli> fp_ms = t2 - t1;
+
 
 cout << "Found " << pr_states.size() << " images." << endl;
-
+cout << "Generation took " <<  fp_ms.count() << " ms." << endl;
 
 // save states to file
 fstream fout(outfile, ios::out);
@@ -69,7 +80,7 @@ if(fout.is_open()) {
 	for(auto state : pr_states) {
 		for(unsigned k=0; k<n; k++) {
 			if(state.at(k) != 0) {
-				fout << j << " " << k+1 << " " << state.at(k) << endl;
+				fout << j << " " << k+1 << " " << scientific << state.at(k) << endl;
 			}
 		}
 		++j;

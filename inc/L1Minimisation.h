@@ -1,10 +1,9 @@
-#ifndef CONVEXSEPERATION_H
-#define CONVEXSEPERATION_H
+#ifndef L1MINIMISATION_H
+#define L1MINIMISATION_H
 #include <string>
 #include <vector>
 
 using namespace std;
-
 
 
 // ---------------------------------------
@@ -12,7 +11,7 @@ using namespace std;
 // ---------------------------------------
 
 
-class ConvexSeparation {
+class L1Minimisation {
 protected:
 	// size parameters
 	// unsigned _nvertices = 0;
@@ -21,10 +20,10 @@ protected:
 public:
 
 	// Constructors
-	ConvexSeparation() { }
+	L1Minimisation() { }
 
 	// Destructor
-	virtual ~ConvexSeparation() { }
+	virtual ~L1Minimisation() { }
 
 	// abstract methods
 
@@ -33,9 +32,6 @@ public:
 
 	// single point checking method
 	virtual int check_point(vector<double> &y) = 0;
-
-	// given a 1-parameter family of points, y(p), compute the threshold value p = p_th for which the curve of points intersects the polytope and returns it
-	virtual double check_family(PointGenerator &y) = 0;
 
 	// write solution to outfile
 	virtual void write_sol(string outfile) = 0;
