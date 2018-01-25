@@ -36,7 +36,7 @@ string output_prefix;
 double nlower, nupper, eps;
 unsigned niter;
 string method;
-bool Quiet;
+bool Quiet,project;
 
 int dimension; // = pow(4, number_of_qubits + 1) - 1; // ambient dimension of the embedded polytope
 
@@ -66,6 +66,9 @@ try {
 
 	TCLAP::SwitchArg Quiet_arg ("Q","Quiet","Suppress detailed output to files", cmd, false);
 
+	TCLAP::ValueArg<bool> project_arg ("p","project", "Boolean variable which decides whether to project the states or not.", false, true, "Bool");
+	cmd.add(project_arg);
+
 	vector<string> allowed2 = {"simplex", "interior_point"};
 	TCLAP::ValuesConstraint<string> constraint2(allowed2);
 	TCLAP::ValueArg<string> method_arg ("m","method", "LP solver to use", false, "simplex", &constraint2);
@@ -81,6 +84,7 @@ try {
 	eps = eps_arg.getValue();
 	method = method_arg.getValue();
 	Quiet = Quiet_arg.getValue();
+	project = project_arg.getValue();
 
 
 	if(nlower > nupper) {
@@ -117,16 +121,22 @@ int ret_status;
 // lp.print_parameters();
 
 
-// set up point to check
-NoisyHState y (lp.get_dimension());
-
-
 // ----------------------------------
 // ------ start computation
 // ----------------------------------
 
-// solve & write solution
-double pth = lp.check_family(y);
+double pth;
+
+// set up point to check
+if(project == true) {
+	ProjectedNoisyHState y (lp.get_dimension());	
+	pth = lp.check_family(y);
+} 
+else {
+	NoisyHState y ( (unsigned)(log(lp.get_dimension())/log(4)) );	
+	pth = lp.check_family(y);
+}
+
 cout << "Threshold value p_th = " << setprecision((int)(-log10(eps))) << pth << endl;
 
 

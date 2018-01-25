@@ -5,6 +5,9 @@
 
 using namespace std;
 
+#ifndef POINTGENERATOR_H
+#include "PointGenerator.h"
+#endif
 
 
 // ---------------------------------------

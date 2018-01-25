@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
 		}
 
 		cout << "Check if H is invariant under projection ... ";
-		if(project_state(H_state_rotated(m),m,false) == H_state_nb(m)) {
+		if(project_state(H_state(m),m,true) == H_state_nb(m)) {
 			cout << "true." << endl;
 		}
 		else {
@@ -101,18 +101,18 @@ int main(int argc, char** argv) {
 			cout << "\tError" << endl;
 
 			cout << "Projection is: " << endl;
-			for(auto x : project_state(H_state_rotated(m),m,false)) {
-				cout << x << " ";
+			for(auto x : project_state(H_state(m),m,true)) {
+				cout << scientific << x << " ";
 			}
 			cout << endl;
 
 			cout << "Should be:" << endl;
 			for(auto x : H_state_nb(m)) {
-				cout << x << " ";
+				cout << scientific << x << " ";
 			}
 			cout << endl;
 
-			break;
+			// break;
 		}
 
 		cout << endl;
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
 	for(unsigned m=1; m<4; m++) {
 		cout << "Generate projected stabiliser states for n = " << m << endl;
 
-		set<vector<double>> pr_states = generate_projected_stabiliser_states_set(m);
+		vector<vector<double>> pr_states = generate_projected_stabiliser_states(m);
 
 		cout << "Found " << pr_states.size() << " images." << endl;
 

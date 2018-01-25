@@ -2,6 +2,7 @@
 #define GLPKL1MINIMISATION_H
 #include <string>
 #include <vector>
+#include <glpk.h>
 
 #ifndef GLPKFORMAT_H
 #include "GLPKFormat.h"
@@ -23,36 +24,6 @@ using namespace std;
 // ---------------------------------------
 
 
-class L1Minimisation {
-protected:
-	// size parameters
-	// unsigned _nvertices = 0;
-	unsigned _dim = 0;
-
-public:
-
-	// Constructors
-	L1Minimisation() { }
-
-	// Destructor
-	virtual ~L1Minimisation() { }
-
-	// abstract methods
-
-	// reading & allocation method
-	virtual int read_vertex_matrix(string cmatrix_file) = 0; 
-
-	// single point checking method
-	virtual int check_point(vector<double> &y) = 0;
-
-	// write solution to outfile
-	virtual void write_sol(string outfile) = 0;
-
-	virtual double get_obj_value() = 0;
-
-	virtual int get_status() = 0;
-};
-
 
 class GLPKL1Minimisation: public L1Minimisation {
 protected:
@@ -60,14 +31,11 @@ protected:
 	// unsigned _nvertices; 
 	unsigned _dim;
 	
-	// coordinates of a point to check
-	vector<double> _y;
 
 	// GLPK variables
 	glp_prob *_lp = nullptr;
 	glp_smcp _parm;
 	int _glp_ret = 0;
-	vector<int> _ind;
 	string _method = "simplex";
 
 	// output
@@ -79,8 +47,8 @@ protected:
 		// ----- create GLPK problem 
 
 		unsigned nnz = data.non_zeros;
-		unsigned nvertices = data.nrows;
-		_dim = data.ncols;
+		unsigned nvertices = data.ncols;
+		_dim = data.nrows;
 
 		// create new problem
 		if(_lp != nullptr) {
@@ -91,57 +59,73 @@ protected:
 		}
 
 		// set up problem parameters
-		glp_set_prob_name(_lp, "Polytope membership");
+		glp_set_prob_name(_lp, "L1 Minimisation");
 		glp_set_obj_dir(_lp, GLP_MIN);
 
 		string s;
 
 		// setting up rows
-		glp_add_rows(_lp, nvertices+1);
-		for(int i=1; i<=nvertices; i++) {
-			s = "p" + to_string(i);
+		glp_add_rows(_lp, _dim + 2*nvertices);
+		for(int i=1; i<=_dim; i++) {
+			s = "y" + to_string(i);
 			glp_set_row_name(_lp, i, s.c_str());
-			glp_set_row_bnds(_lp, i, GLP_UP, 0.0, 0.0);
+			glp_set_row_bnds(_lp, i, GLP_FX, 0.0, 0.0); // fixed bound
 		}
-		glp_set_row_name(_lp, nvertices+1, "q");
-		glp_set_row_bnds(_lp, nvertices+1, GLP_UP, 0.0, 1.0);
+		for(int i=1; i<=nvertices; i++) {
+			s = "rx" + to_string(i);
+			glp_set_row_name(_lp, _dim+i, s.c_str());
+			glp_set_row_bnds(_lp, _dim+i, GLP_UP, 0.0, 0.0); // upper bound 0
+		}
+		for(int i=1; i<=nvertices; i++) {
+			s = "rs" + to_string(i);
+			glp_set_row_name(_lp, _dim+nvertices+i, s.c_str());
+			glp_set_row_bnds(_lp, _dim+nvertices+i, GLP_LO, 0.0, 0.0); // lower bound 0
+		}
+
 
 		// setting up cols 
-		glp_add_cols(_lp, _dim+1);
-		for(int j=1; j<=_dim; j++) {
+		glp_add_cols(_lp, 2*nvertices);
+		for(int j=1; j<=nvertices; j++) {
 			s = "x" + to_string(j);
 			glp_set_col_name(_lp, j, s.c_str());
 			glp_set_col_bnds(_lp, j, GLP_FR, 0.0, 0.0);
 		}
-		s = "x0";
-		glp_set_col_name(_lp, _dim+1, s.c_str());
-		glp_set_col_bnds(_lp, _dim+1, GLP_FR, 0.0, 0.0);
+		for(int j=1; j<=nvertices; j++) {
+			s = "s" + to_string(j);
+			glp_set_col_name(_lp, nvertices+j, s.c_str());
+			glp_set_col_bnds(_lp, nvertices+j, GLP_FR, 0.0, 0.0);
+		}
 
-		// setting up constraint matrix
+		// setting up objective function = 1^T.s
+		vector<int> ind (nvertices+1, 1);
+		for(int j=1; j<=nvertices; j++) 
+			glp_set_obj_coef(_lp, nvertices+j, ind.at(j));
+
+
+		// ----- setting up constraint matrix
+
+		// load vertices
 		glp_load_matrix(_lp, nnz, data.rows.data(), data.cols.data(), data.values.data());
 
-		// setting last column
-		vector<int> ind (nvertices+2);
-		vector<double> c (nvertices+2);
-		// ind.at(0) = 0;
-		for(int i=1; i<=nvertices+1; i++) {
-			ind.at(i) = i;
-			c.at(i) = -1.;
+		// setting up the rest
+		ind = vector<int>(3,0);
+		vector<double> val (3,0);
+		val.at(1) = 1;
+
+		for(int i=1; i<=nvertices; i++) {
+			// cols to change
+			ind.at(1) = i; 
+			ind.at(2) = nvertices+i;
+
+			// set row dim+i			
+			val.at(2) = -1;
+			glp_set_mat_row(_lp, _dim+i, 2, ind.data(), val.data());
+
+			// set row dim+nvertices+i
+			val.at(2) = 1;
+			glp_set_mat_row(_lp, nvertices+_dim+i, 2, ind.data(), val.data());
 		}
-		glp_set_mat_col(_lp, _dim+1, nvertices+1, ind.data(), c.data());
 
-
-
-		// ----- additional preparation
-
-		// preparing coordinates of the point to check
-		_y.resize(_dim+2);
-		_y.at(_dim+1) = -1.;
-
-		// some helper stuff for GLPK
-		_ind.reserve(_dim+2);
-		for(int i=0; i<=_dim+1; i++)
-			_ind.push_back(i);
 	}
 
 public:
@@ -179,13 +163,13 @@ public:
 
 	// input
 	int read_vertex_matrix(string cmatrix_file) {
-		GLPKFormat data = to_GLPK_format(cmatrix_file);
+		GLPKFormat data = to_GLPK_format(cmatrix_file, true);
 		update_problem(data);
 		return 0;
 	}
 
 	int read_vertex_matrix(SparseMatrix<double,RowMajor>& vertex_matrix) {
-		GLPKFormat data = to_GLPK_format(vertex_matrix);
+		GLPKFormat data = to_GLPK_format(vertex_matrix, true);
 		update_problem(data);
 		return 0;
 	}
@@ -194,25 +178,12 @@ public:
 	// operations
 	int check_point(vector<double> &y) {
 		assert(y.size() == _dim);
-			
-		// copying y
-		copy(y.begin(), y.end(), _y.begin()+1);
 
-		// make sure last element is -1
-		_y.at(_dim+1) = -1.;
+		// setting bounds
+		for(int i=1; i<=_dim; i++) {
+			glp_set_row_bnds(_lp, i, GLP_FX, y.at(i-1), 0.0); // fixed bound
+		}
 
-		// replacing the last row of the constraint matrix
-		glp_set_mat_row(_lp, get_nvertices()+1, _dim+1, _ind.data(), _y.data());
-
-		// setting up objective function
-		for(int j=1; j<=_dim+1; j++) 
-			glp_set_obj_coef(_lp, j, _y.at(j));
-
-
-		// changes in the constraint matrix generally invalides the basis factorization
-		//if(glp_bf_exists(_lp) == 0)
-		//	glp_factorize(_lp);
-		// glp_warm_up(_lp);
 		glp_std_basis(_lp);
 		
 		// solve
@@ -230,31 +201,6 @@ public:
 		// 	return glp_ipt_obj_val(_lp);
 	}
 
-	// vector<double> get_opt_solution() {
-	// 	// TBD
-	// }
-
-	vector<double> get_vertex(unsigned i) {
-		// returns a dense vector containing the coordinates of the i-th vertex
-		assert(i < get_nvertices());
-
-		vector<double> v (_dim, 0.);
-
-		int *ind = new int[_dim+2];
-		double *val = new double[_dim+2];
-		int len = glp_get_mat_row(_lp, i+1, ind, val);
-
-		for(unsigned j=1; j<=len; j++){
-			if(ind[j] <= _dim)
-				v.at(ind[j]-1) = val[j];
-		}
-
-		delete[] ind;
-		delete[] val;
-
-		return v;
-	}
-
 	int get_status() {
 		if(_method == "simplex")
 			return glp_get_status(_lp);
@@ -263,7 +209,7 @@ public:
 	}
 
 	unsigned get_nvertices() {
-		return glp_get_num_rows(_lp)-1;
+		return (glp_get_num_rows(_lp)-_dim)/2;
 	}
 
 	unsigned get_dimension() {
@@ -303,34 +249,6 @@ public:
 	// output methods
 	void write_sol(string outfile) {
 		glp_print_sol(_lp, outfile.c_str());
-	}
-
-	void write_constraint_matrix(string outfile) {
-		ofstream fout (outfile);
-
-		int *ind = new int[_dim+2];
-		double *val = new double[_dim+2];
-		int len;
-
-		if(fout.is_open()) {
-			for(unsigned i = 1; i <= get_nvertices(); i++) {
-				// get row
-				len = glp_get_mat_row(_lp, i, ind, val);
-
-				for(unsigned j=1; j<=len; j++) {
-					if(ind[j] <= _dim) {
-						fout << i << " " << ind[j] << " " << scientific << val[j] << endl;
-					}
-				}
-			}
-			fout.close();
-		}
-		else {
-			cout << "Error in GLPKConvexSeparation::write_constraint_matrix : Couldn't open file " + outfile + " for writing" << endl;
-		}
-
-		delete[] ind;
-		delete[] val;
 	}
 
 	void print_parameters() {

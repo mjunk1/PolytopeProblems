@@ -10,16 +10,20 @@
 #include <algorithm>
 #include <eigen3/Eigen/Sparse>
 
-#ifndef GLPKFORMAT_H
-#include "GLPKFormat.h"
-#endif
-
 #ifndef UTILITIES_H
 #include "utilities.h"
 #endif
 
+#ifndef GLPKFORMAT_H
+#include "GLPKFormat.h"
+#endif
+
 #ifndef CONVEXSEPERATION_H
 #include "ConvexSeparation.h"
+#endif
+
+#ifndef POINTGENERATOR_H
+#include "PointGenerator.h"
 #endif
 
 using namespace std;
@@ -122,9 +126,9 @@ protected:
 		_y.at(_dim+1) = -1.;
 
 		// some helper stuff for GLPK
-		_ind.reserve(_dim+2);
+		_ind.resize(_dim+2);
 		for(int i=0; i<=_dim+1; i++)
-			_ind.push_back(i);
+			_ind.at(i) = i;
 	}
 
 public:

@@ -28,6 +28,7 @@ int main(int argc, char** argv) {
 
 unsigned n;
 string outfile;
+bool project;
 
 try {
 
@@ -40,10 +41,14 @@ try {
 	TCLAP::ValueArg<string> output_arg ("o", "outfile", "Output file name that will be used for writing the reduced constraint matrix", true, "out.dat", "string");
 	cmd.add(output_arg);
 
+	TCLAP::ValueArg<bool> project_arg ("p","project", "Boolean variable which decides whether to project the states or not.", false, true, "Bool");
+	cmd.add(project_arg);
+
 	cmd.parse(argc, argv);
 
 	n = nqubits_arg.getValue();
 	outfile = output_arg.getValue();
+	project = project_arg.getValue();
 
 } catch (TCLAP::ArgException &e) { 
 	cerr << "Error: " << e.error() << " for arg " << e.argId() << endl; 
@@ -56,12 +61,19 @@ try {
 
 cout << "Generate projected stabiliser states for n = " << n << endl;
 
-
 // timing
 auto t1 = chrono::high_resolution_clock::now();
 
+
+vector<vector<double>> pr_states;
+
 // set<vector<double>> pr_states = generate_projected_stabiliser_states_set(n);
-vector<vector<double>> pr_states = generate_projected_stabiliser_states(n);
+if(project == true) {
+	pr_states = generate_projected_stabiliser_states(n);
+}
+else {
+	pr_states = generate_stabiliser_states(n);
+}
 
 auto t2 = chrono::high_resolution_clock::now();	
 
@@ -78,7 +90,7 @@ unsigned j = 1;
 if(fout.is_open()) {
 
 	for(auto state : pr_states) {
-		for(unsigned k=0; k<n; k++) {
+		for(unsigned k=0; k<state.size(); k++) {
 			if(state.at(k) != 0) {
 				fout << j << " " << k+1 << " " << scientific << state.at(k) << endl;
 			}

@@ -91,6 +91,25 @@ vector<unsigned> index_set(unsigned k, unsigned n) {
 // -----------------------------------
 
 // Representation of H state
+vector<double> H = {1,1/sqrt(2),0,1/sqrt(2)};
+
+vector<double> H_state(const unsigned n, const double p = 0) {
+	vector<double> ret (pow(4,n), 0.);
+	vector<unsigned> ind (n);
+
+	ret.at(0) = 1;
+
+	for(unsigned i=1; i<pow(4,n); i++) {
+		get_multi_index(n, 4, i, ind);
+		ret.at(i) = 1-p;
+		for(unsigned j=0; j<n; j++) {
+			ret.at(i) *= H.at(ind.at(j));
+		}
+	}
+
+	return ret;
+}
+
 vector<double> H_state_rotated(const unsigned n) {
 	vector<double> ret (pow(4,n), 0.);
 
@@ -112,6 +131,21 @@ vector<double> H_state_nb(const unsigned n, const double p = 0) {
 	return ret;
 }
 
+class ProjectedNoisyHState: public PointGenerator {
+protected:
+	unsigned _n;
+
+public:
+	ProjectedNoisyHState(unsigned n) {
+		_n = n;
+	}
+
+	vector<double> operator() (double p) {
+		return H_state_nb(_n,p);
+	}
+
+};
+
 class NoisyHState: public PointGenerator {
 protected:
 	unsigned _n;
@@ -122,7 +156,7 @@ public:
 	}
 
 	vector<double> operator() (double p) {
-		return H_state_nb(_n,p);
+		return H_state(_n,p);
 	}
 
 };
@@ -271,7 +305,7 @@ vector<vector<double>> generate_stabiliser_states(const unsigned n) {
 	int d = distance(last, states.end());
 	states.erase(last,states.end());
 
-	cout << "Found " << d << " duplicates. " << size-d << " elements left." << endl;
+	// cout << "Found " << d << " duplicates. " << size-d << " elements left." << endl;
 
 	return states;
 }
@@ -492,6 +526,73 @@ vector<vector<double>> generate_projected_stabiliser_states_vector(const unsigne
 	return states;
 }
 
+vector<vector<double>> generate_projected_stabiliser_states_vector_test(const unsigned n) {
+	// estimated size (overcounted!)
+	unsigned N = pow(2,n*(n+1)/2);
+	unsigned M = pow(6,n);
+	unsigned S = pow(2,n);
+	unsigned size = N*M*S;
+
+	// needed later
+	vector<vector<double>> states;
+	states.reserve(pow(3,n)); // estimated size
+	vector<double> tmp_state (pow(4,n),0);
+	vector<double> tmp_state2 (n,0);
+	vector<unsigned> B;
+	// vector<unsigned> SB (n);
+	vector<double> A = rotation_matrix(n);
+
+	// generate 1-qubit symplectic group
+	// vector<vector<unsigned>> symp_group (6);
+
+	// for(unsigned i=0; i<6; i++) {
+	// 	symp_group.at(i) = generate_symplectic_matrix(i,1);
+	// }
+
+	// // generate local n-qubit symplectic group
+	// vector<vector<unsigned>> loc_symp_group (M);
+	// vector<unsigned> indices (n);
+	// vector<vector<unsigned>> Slist (n);
+	// for(unsigned i=0; i<M; i++) {
+	// 	get_multi_index(n, 6, i, indices);
+	// 	for(unsigned j=0; j<n; j++) {
+	// 		Slist.at(j) = symp_group.at(indices.at(j));
+	// 	}
+	// 	loc_symp_group.at(i) = direct_sum(Slist);
+	// }
+
+	// graph state loop
+	for(unsigned i=0; i<N; i++) {
+		B = generate_gs_Lagrangian(i,n);
+
+		// // local symplectic orbit
+		// for(unsigned j=0; j<M; j++) {
+		// 	// transform the basis vectors with the j-th matrix
+		// 	for(unsigned k=0; k<n; k++) {
+		// 		SB.at(k) = matrix_vector_prod_mod2(loc_symp_group.at(j), B.at(k));
+		// 	}
+
+			// generate stabiliser states for all possible sign choices and directly project them
+			// note that the state is only added if it not already exists in the set states.
+			for(unsigned s=0; s<S; s++) {
+				tmp_state = generate_stabiliser_state(B, s);
+				tmp_state2 = project_state(tmp_state, n, A);
+
+				// check if projected state tmp_state2 already exists
+				// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than tmp_state2
+				auto it = lower_bound(states.begin(), states.end(), tmp_state2);
+				if(it == states.end() || tmp_state2 < *it) {
+					// the element is new
+					states.insert(it, tmp_state2);
+				}
+				// note that procedures preserves the ordering ... 
+			}
+		// }
+	}
+
+	return states;
+}
+
 
 // This function tries to balance time and space complexity by using a std::vector that consumes about mem_size memory. Every couple of iterations, duplicates are deleted from that vector.
 // mem_size should be given in MB
@@ -641,7 +742,7 @@ vector<vector<double>> generate_projected_stabiliser_states_old(const unsigned n
 // this function uses a sorted std::vector which requires less memory for the states to store and should be faster than std::set
 // however the advantage seems to diminuish for larger n
 vector<vector<double>> generate_projected_stabiliser_states(const unsigned n) {
-	return generate_projected_stabiliser_states_vector(n);
+	return generate_projected_stabiliser_states_vector_test(n);
 }
 
 #endif
