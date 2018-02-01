@@ -166,11 +166,9 @@ public:
 // ---- Stabiliser generation
 // -----------------------------------
 
+// --- graph states
 
-
-// --- stabilisers 
-
-vector<unsigned> generate_gs_Lagrangian(const unsigned i, const unsigned n) {
+vector<unsigned> generate_gs_Lagrangian(const unsigned th, const unsigned n) {
 	// This generates the i-th symmetric nxn matrix and returns the representation of the corresponding graph state given in terms of a basis for the Lagrangian subspace
 	// The basis vectors are given by the column vectors of the matrix
 	// 			(  A  )
@@ -181,26 +179,52 @@ vector<unsigned> generate_gs_Lagrangian(const unsigned i, const unsigned n) {
 
 	// reserve memory
 	vector<unsigned> B(n,0);
-	unsigned N = n*(n+1)/2;
+	unsigned N = n*(n-1)/2;
 	vector<unsigned> M = coord_matrix(n);
 
-	for(unsigned j=0; j<n; j++) {
-		// save the j-th basis vector
-		for(unsigned k=0; k<n; k++) {
-			if( get_bit(i, get_symmetric_index(k,j), N) == 1) {
-				B[j] = set_bit(B[j], k, 2*n);
-			}
-		}
+	// for(unsigned j=0; j<n; j++) {
+	// 	// save the j-th basis vector
+	// 	for(unsigned k=0; k<n; k++) {
+	// 		if( get_bit(th, get_symmetric_index(k,j), N) == 1) {
+	// 			B[j] = set_bit(B[j], k, 2*n);
+	// 		}
+	// 	}
 
+	// 	// identity matrix
+	// 	B[j] = set_bit(B[j], n+j, 2*n);	
+
+	// 	// change to product coordinates
+	// 	B[j] = matrix_vector_prod_mod2(M, B[j]);	
+	// }
+
+	// fill B 
+	unsigned i,j;
+
+	for(unsigned k=0; k<N; k++) {
+		if( get_bit(th, k, N) == 1) {
+			i = n - 2 - floor(sqrt(-8*k + 4*n*(n-1)-7)/2.0 - 0.5);
+			j = k + i + 1 - n*(n-1)/2 + (n-i)*((n-i)-1)/2;
+
+			B[j] = set_bit(B[j], i, 2*n);
+			B[i] = set_bit(B[i], j, 2*n);
+		}
+	}
+	
+	for(unsigned j=0; j<n; j++) {
 		// identity matrix
-		B[j] = set_bit(B[j], n+j, 2*n);	
+		B[j] = set_bit(B[j], n+j, 2*n); 
 
 		// change to product coordinates
-		B[j] = matrix_vector_prod_mod2(M, B[j]);	
+		B[j] = matrix_vector_prod_mod2(M, B[j]);
 	}
 
 	return B;
 }
+
+
+
+
+// --- stabilisers 
 
 bool in_Lagrangian(const unsigned x, const vector<unsigned> B, const unsigned n) {
 	unsigned test = 0;
@@ -528,7 +552,7 @@ vector<vector<double>> generate_projected_stabiliser_states_vector(const unsigne
 
 vector<vector<double>> generate_projected_stabiliser_states_vector_test(const unsigned n) {
 	// estimated size (overcounted!)
-	unsigned N = pow(2,n*(n+1)/2);
+	unsigned N = pow(2,n*(n-1)/2);
 	unsigned M = pow(6,n);
 	unsigned S = pow(2,n);
 	unsigned size = N*M*S;
