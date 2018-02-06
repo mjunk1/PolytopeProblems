@@ -1,8 +1,12 @@
 *.log
 *.dat
 *.sh
+callgrind*
 TBD
 log/*
 constraints/*
 data/*
 bin/*
+testing/bin/*
+testing/ref_data/*
+testing/constraints/*

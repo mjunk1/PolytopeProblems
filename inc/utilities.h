@@ -9,6 +9,7 @@
 #include <random>
 #include <eigen3/Eigen/Sparse>
 #include <tuple>
+#include <cblas.h>
 
 
 using namespace std;
@@ -53,17 +54,30 @@ vector<double> random_distribution(unsigned n) {
 
 // linear algebra
 // to be replaced with BLAS
-vector<double> matrix_vector_prod(vector<double> A, const vector<double> x) {
+// vector<double> matrix_vector_prod(const vector<double> A, const vector<double> x) {
+// 	unsigned N = x.size(); // N = 4^n
+// 	unsigned M = A.size()/N;
+// 	vector<double> y(M,0);
+
+// 	// transform
+// 	for(unsigned i=0; i<M; i++) {
+// 		for(unsigned j=0; j<N; j++) {
+// 			y.at(i) += A.at(N*i+j)*x.at(j);
+// 		}
+// 	}
+
+// 	return y;
+// }
+
+
+// careful! This function applies the transposed matrix A^T to x ...
+// in my case, this is convenient since ColMajor layout is faster
+vector<double> my_matrix_vector_prod(const vector<double> &A, const vector<double> &x) {
 	unsigned N = x.size(); // N = 4^n
-	unsigned M = A.size()/N;
-	vector<double> y(M,0);
+	vector<double> y(N,0);
 
 	// transform
-	for(unsigned i=0; i<M; i++) {
-		for(unsigned j=0; j<N; j++) {
-			y.at(i) += A.at(N*i+j)*x.at(j);
-		}
-	}
+	cblas_dgemv(CblasColMajor,CblasNoTrans,N,N,1.0,A.data(),N,x.data(),1,0.0,y.data(),1);
 
 	return y;
 }
@@ -146,11 +160,11 @@ unsigned get_linear_index(const unsigned arr_dim, const unsigned* arr_ranges, co
 	return index;
 }
 
-unsigned get_linear_index(const unsigned arr_dim, const unsigned* arr_ranges, const initializer_list<unsigned> indices){
+unsigned get_linear_index(const unsigned arr_dim, const unsigned* arr_ranges, const initializer_list<unsigned> &indices){
 	return get_linear_index(arr_dim, arr_ranges, const_cast<unsigned* >(indices.begin()));
 }
 
-unsigned get_linear_index(const unsigned arr_dim, const initializer_list<unsigned> arr_ranges, const initializer_list<unsigned> indices){
+unsigned get_linear_index(const unsigned arr_dim, const initializer_list<unsigned> &arr_ranges, const initializer_list<unsigned> &indices){
 	return get_linear_index(arr_dim, const_cast<unsigned* >(arr_ranges.begin()), const_cast<unsigned* >(indices.begin()));
 }
 
@@ -160,7 +174,7 @@ unsigned get_linear_index(const unsigned arr_dim, const unsigned arr_range, cons
 	return get_linear_index(arr_dim, vec.data(), indices);
 }
 
-unsigned get_linear_index(const unsigned arr_dim, const unsigned arr_range, const initializer_list<unsigned> indices) {
+unsigned get_linear_index(const unsigned arr_dim, const unsigned arr_range, const initializer_list<unsigned> &indices) {
 	vector<unsigned> vec (arr_dim, arr_range);
 	return get_linear_index(arr_dim, vec.data(), const_cast<unsigned* >(indices.begin()));
 }
@@ -175,6 +189,14 @@ unsigned get_symmetric_index(const unsigned i, const unsigned j) {
 	else {
 		return (i + j*(j+1)/2);
 	}
+}
+
+inline unsigned get_symmetric_row(const unsigned k, const unsigned n) {
+	return n - 2 - floor(sqrt(-8*k + 4*n*(n-1)-7)/2.0 - 0.5);
+}
+
+inline unsigned get_symmetric_col(const unsigned i, const unsigned k, const unsigned n) {
+	return k + i + 1 - n*(n-1)/2 + (n-i)*((n-i)-1)/2;
 }
 
 

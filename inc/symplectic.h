@@ -190,6 +190,17 @@ unsigned zx_to_product_coordinates(const unsigned x, const unsigned n) {
 	return matrix_vector_prod_mod2(coord_matrix(n), x);
 }
 
+// counts 1,X,Y,Z weight of the Pauli operator that corresponds to the phase space point a
+vector<unsigned> count_weights(const unsigned a, const unsigned n) {
+	unsigned ai;
+	vector<unsigned> weights(4,0);
+	for(unsigned i=0; i<n; i++) {
+		ai = get_bits(a, 2*i, 2*i+1, 2*n);
+		weights.at(ai) += 1;
+	}
+	return weights;
+}
+
 // ---- Symplectic group generation
 
 int phase_function(const unsigned a, const unsigned *S, const unsigned n) {

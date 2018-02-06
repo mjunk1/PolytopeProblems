@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
 	cout << "Generation of stabiliser states" << endl;
 	cout << "-------------------------------" << endl;
 
-	for(unsigned m=1; m<3; m++) {
+	for(unsigned m=1; m<4; m++) {
 		cout << "Generate stabiliser states for n = " << m << endl;
 		vector<vector<double>> states = generate_stabiliser_states(m);
 
@@ -93,7 +93,8 @@ int main(int argc, char** argv) {
 		}
 
 		cout << "Check if H is invariant under projection ... ";
-		if(project_state(H_state(m),m,true) == H_state_nb(m)) {
+		// if(project_state(H_state(m),m,true) == H_state_nb(m)) {
+		if(project_state_alt(H_state(m),m) == H_state_nb(m)) {
 			cout << "true." << endl;
 		}
 		else {
@@ -101,7 +102,8 @@ int main(int argc, char** argv) {
 			cout << "\tError" << endl;
 
 			cout << "Projection is: " << endl;
-			for(auto x : project_state(H_state(m),m,true)) {
+			vector<double> hstate = H_state(m);
+			for(auto x : project_state_alt(hstate,m)) {
 				cout << scientific << x << " ";
 			}
 			cout << endl;

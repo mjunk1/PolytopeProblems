@@ -7,6 +7,7 @@
 #include <cassert>
 #include <algorithm>
 #include <set>
+#include <fstream>
 
 #ifndef SYMPLECTIC_H
 #include "symplectic.h"
@@ -27,20 +28,29 @@ vector<double> Tmatrix = {1,0,0,0,0,1/sqrt(2),0,-1/sqrt(2),0,0,1,0,0,1/sqrt(2),0
 
 vector<double> rotation_matrix(const unsigned n) {
 	// build transformation matrix A = (T^t)^{\otimes n}
+	// actually the transposed ...
 	unsigned N = pow(4,n);
 	vector<double> A(N*N);
 	vector<unsigned> ai(n);
 	vector<unsigned> bi(n);
 
 	for(unsigned a=0; a<N; a++) {
+		// decompose indices	
+		// get_multi_index(n, 4, a, ai);
+		for(unsigned i=0; i<n; i++) {
+			ai.at(i) = get_bits(a, 2*i, 2*i+1, 2*n);
+		}
+
 		for(unsigned b=0; b<N; b++) {
-			// decompose indices
-			get_multi_index(n, 4, a, ai);
-			get_multi_index(n, 4, b, bi);
+			// decompose indices	
+			// get_multi_index(n, 4, b, bi);
+			for(unsigned i=0; i<n; i++) {
+				bi.at(i) = get_bits(b, 2*i, 2*i+1, 2*n);
+			}
 
 			A.at(a*N+b) = 1;
 			for(unsigned i=0; i<n; i++) {
-				A.at(a*N+b) *= Tmatrix.at(bi.at(i)*4+ai.at(i));
+				A.at(a*N+b) *= Tmatrix.at(ai.at(i)*4+bi.at(i));
 			}
 		}
 	}
@@ -48,7 +58,7 @@ vector<double> rotation_matrix(const unsigned n) {
 	return A;
 }
 
-vector<unsigned> index_set(unsigned k, unsigned n) {
+vector<unsigned> index_set(const unsigned k, const unsigned n) {
 	// returns the index set corresponding to the subset of phase space points that have the form
 	// 		a = (0,1,0,1,...,0,1,0,0,...,0,0)			((0,1) is appearing exactly k times)
 	// and pairwise permutations thereof.
@@ -84,7 +94,100 @@ vector<unsigned> index_set(unsigned k, unsigned n) {
 	return iset0;
 }
 
+vector<unsigned> index_set_y(const unsigned k, const unsigned n, const bool use_zeros=true) {
+	// same as index_set but with (1,1) instead of (0,1)
+	// use_zeros is a switch of wether to fill the rest of the string with zeros or (0,1)'s
+	assert(k<=n && n>0);
 
+	if(k==0) {
+		if(use_zeros == true) {
+			return vector<unsigned>({0});
+		}
+		else {
+			unsigned r = 0;
+			for(unsigned i=0; i<n; i++) {
+				// if r = 010101, then (r<<2)^1 = (01010100 )^1 = 01010101
+				r = (r << 2)^1;
+			}
+			return vector<unsigned> ({r});
+		}
+	}
+
+	if(n==k) {
+		unsigned r = pow(2,2*n) - 1; // r = 1111...11
+		return vector<unsigned> ({r});
+	}
+
+	// first index (0,0)
+	vector<unsigned> iset0 = index_set_y(k, n-1, use_zeros);
+	if(use_zeros == false) {
+		for(unsigned i=0; i<iset0.size(); i++) {
+			// add 01 in front of every index
+			iset0.at(i) = set_bit(iset0.at(i), 1, 2*n);
+		}
+	}
+
+	// first index (1,1)
+	vector<unsigned> iset1 = index_set_y(k-1, n-1, use_zeros);
+	for(unsigned i=0; i<iset1.size(); i++) {
+		// add 11 in front of every index
+		iset1.at(i) = set_bit(iset1.at(i), 0, 2*n);
+		iset1.at(i) = set_bit(iset1.at(i), 1, 2*n);
+	}
+
+	// merge the two sets
+	iset0.reserve(iset0.size()+iset1.size());
+	iset0.insert(iset0.end(), iset1.begin(), iset1.end());
+
+	return iset0;
+}
+
+vector<unsigned> index_set2(const unsigned kk, const unsigned k, const unsigned n) {
+	// returns the index set corresponding to the subset of phase space points that have the form
+	// 		a = (0,1,0,1,...,0,1,1,1,...,1,1,0,0,...,0,0)			((0,1) is appearing exactly k-kk times, (1,1) is appearing kk times)
+	// and pairwise permutations thereof.
+	assert(kk<=k && k<=n && n>0);
+
+	if(kk==0) {
+		// just the ordinary index set
+		return index_set(k,n);
+	}
+
+	if(kk==k) {
+		// now only (1,1) appearing, which is ordinary index set with replacing (0,1)->(1,1)
+		return index_set_y(k,n);
+	}
+
+	if(n==k) {
+		// no zeros at all
+		return index_set_y(kk,n,false);
+	}
+
+	// first index (0,0)
+	vector<unsigned> iset0 = index_set2(kk, k, n-1);
+
+	// first index (0,1)
+	vector<unsigned> iset1 = index_set2(kk, k-1, n-1);
+	for(unsigned i=0; i<iset1.size(); i++) {
+		// add 01 in front of every index
+		iset1.at(i) = set_bit(iset1.at(i), 1, 2*n);
+	}
+
+	// first index (1,1)
+	vector<unsigned> iset2 = index_set2(kk-1, k-1, n-1);
+	for(unsigned i=0; i<iset2.size(); i++) {
+		// add 11 in front of every index
+		iset2.at(i) = set_bit(iset2.at(i), 0, 2*n);
+		iset2.at(i) = set_bit(iset2.at(i), 1, 2*n);
+	}
+
+	// merge the three sets
+	iset0.reserve(iset0.size()+iset1.size()+iset2.size());
+	iset0.insert(iset0.end(), iset1.begin(), iset1.end());
+	iset0.insert(iset0.end(), iset2.begin(), iset2.end());
+
+	return iset0;
+}
 
 // -----------------------------------
 // ---- Magic state representation
@@ -168,6 +271,55 @@ public:
 
 // --- graph states
 
+
+// reads the geng output of non-isomorphic graphs 
+// the data format is assumed to store the upper triangle of the adjacency matrices of the graphs as e.g.
+//    000
+//    00
+//    0
+// the matrices are proceded by some header line
+// 
+// The matrices are stored row-wise as a bitstring and returned as a vector<unsigned>
+vector<unsigned> read_graph_states(const string file, const unsigned n) {
+	// open the file
+	fstream fin(file, ios::in);
+
+	vector<string> data (n-1);
+	string row;
+	unsigned counter=0;
+	unsigned idx;
+
+	vector<unsigned> ret;
+
+	if(fin.is_open()) {
+		while(fin >> row) {
+			idx = counter % n;
+			if(idx != 0) {
+				data.at(idx-1) = row;
+			} 
+			if(idx == n-1) {
+				// end of block
+
+				// concatenate all strings
+				string tot;
+				for(auto str : data) {
+					tot += str;
+				}
+				// interprete as bitstring and convert to unsigned 
+				ret.push_back( stoul(tot,0,2) );
+			}
+			++counter;
+		}
+	} 
+	else {
+		cout << "Couldn't open file " << file << endl;
+	}
+
+	fin.close();
+
+	return ret;
+}
+
 vector<unsigned> generate_gs_Lagrangian(const unsigned th, const unsigned n) {
 	// This generates the i-th symmetric nxn matrix and returns the representation of the corresponding graph state given in terms of a basis for the Lagrangian subspace
 	// The basis vectors are given by the column vectors of the matrix
@@ -202,8 +354,8 @@ vector<unsigned> generate_gs_Lagrangian(const unsigned th, const unsigned n) {
 
 	for(unsigned k=0; k<N; k++) {
 		if( get_bit(th, k, N) == 1) {
-			i = n - 2 - floor(sqrt(-8*k + 4*n*(n-1)-7)/2.0 - 0.5);
-			j = k + i + 1 - n*(n-1)/2 + (n-i)*((n-i)-1)/2;
+			i = get_symmetric_row(k,n);
+			j = get_symmetric_col(i,k,n);
 
 			B[j] = set_bit(B[j], i, 2*n);
 			B[i] = set_bit(B[i], j, 2*n);
@@ -222,11 +374,9 @@ vector<unsigned> generate_gs_Lagrangian(const unsigned th, const unsigned n) {
 }
 
 
-
-
 // --- stabilisers 
 
-bool in_Lagrangian(const unsigned x, const vector<unsigned> B, const unsigned n) {
+bool in_Lagrangian(const unsigned x, const vector<unsigned> &B, const unsigned n) {
 	unsigned test = 0;
 	for(unsigned v : B) {
 		test += symplectic_form(x,v,n);
@@ -234,7 +384,7 @@ bool in_Lagrangian(const unsigned x, const vector<unsigned> B, const unsigned n)
 	return (test == 0);
 }
 
-vector<double> generate_stabiliser_state(const vector<unsigned> B, const unsigned s) {
+vector<double> generate_stabiliser_state(const vector<unsigned> &B, const unsigned s) {
 	// Generates the stabiliser state rho(B,s) that corresponds to the Lagrangian with basis B and a choice of signs (-1)^{s_i} where the bits s_i \in \Z_2 are specified in the length-n-bitstring s.
 	// The stabiliser state is given in the Pauli basis {W(a)|a\in\Z_2^{2n}} where the only non-vanishing components rho_a corresponds to points a in the Lagrangian subspace and can thus be written in the basis B = (b_1,...,b_n) as
 	//		a = \sum_{i=1}^n a_i b_i.
@@ -338,10 +488,10 @@ vector<vector<double>> generate_stabiliser_states(const unsigned n) {
 
 // -------- projection
 
-vector<double> project_state(const vector<double> state, const unsigned n, vector<double> rot_matrix) {
+vector<double> project_state(const vector<double> &state, const unsigned n, vector<double> &rot_matrix) {
 	// size
 	vector<double> pr_state(n, 0.); // 0th component is ommited since it is forced to be 1 
-	vector<double> y = matrix_vector_prod(rot_matrix, state);
+	vector<double> y = my_matrix_vector_prod(rot_matrix, state);
 
 	// project
 	for(unsigned k=1; k<n+1; k++) {
@@ -356,7 +506,7 @@ vector<double> project_state(const vector<double> state, const unsigned n, vecto
 	return pr_state;
 }
 
-vector<double> project_state(const vector<double> state, const unsigned n) {
+vector<double> project_state(const vector<double> &state, const unsigned n) {
 	// size
 	vector<double> pr_state(n, 0.);
 
@@ -373,7 +523,7 @@ vector<double> project_state(const vector<double> state, const unsigned n) {
 	return pr_state;
 }
 
-vector<double> project_state(vector<double> state, const unsigned n, bool rotate) {
+vector<double> project_state(vector<double> &state, const unsigned n, bool rotate) {
 	// size
 	vector<double> pr_state(n, 0.);
 
@@ -390,7 +540,7 @@ vector<double> project_state(vector<double> state, const unsigned n, bool rotate
 	return pr_state;
 }
 
-vector<vector<double>> project_states(vector<vector<double>> states, const unsigned n) {
+vector<vector<double>> project_states(vector<vector<double>> &states, const unsigned n) {
 	// size
 	unsigned nstates = states.size();
 	vector<vector<double>> pr_states(nstates, vector<double>(n, 0.));
@@ -400,7 +550,7 @@ vector<vector<double>> project_states(vector<vector<double>> states, const unsig
 
 	for(unsigned i=0; i<nstates; i++) {
 		// rotate
-		vector<double> y = matrix_vector_prod(A, states.at(i));
+		vector<double> y = my_matrix_vector_prod(A, states.at(i));
 
 		// project
 		for(unsigned k=1; k<n+1; k++) {
@@ -421,6 +571,29 @@ vector<vector<double>> project_states(vector<vector<double>> states, const unsig
 	return pr_states;
 }
 
+
+// alternative version without matrix-vector product
+vector<double> project_state_alt(const vector<double> &state, const unsigned n) {
+	// size
+	vector<double> pr_state(n, 0.); // 0th component is ommited since it is forced to be 1 
+
+	// project
+	for(unsigned k=1; k<=n; k++) {
+		// average over all components that correspond to k X or Y operators in total
+		// here we loop over the number of Y's
+		for(unsigned kk=0; kk<=k; kk++) {
+			vector<unsigned> aset = index_set2(kk,k,n);
+
+			for(auto a : aset) {
+				pr_state.at(k-1) += state.at(a);
+			}
+		}
+		// normalise
+		pr_state.at(k-1) /= pow(sqrt(2),k);
+	}
+
+	return pr_state;
+}
 
 
 // this function uses std::set which requires less memory for the states to store.
@@ -616,6 +789,107 @@ vector<vector<double>> generate_projected_stabiliser_states_vector_test(const un
 
 	return states;
 }
+
+vector<vector<double>> generate_projected_stabiliser_states_from_graphs(const string file, const unsigned n) {
+
+	// needed later
+	unsigned S = pow(2,n);
+	vector<vector<double>> states;
+	states.reserve(pow(3,n)); // estimated size
+	vector<double> tmp_state (pow(4,n),0);
+	vector<double> tmp_state2 (n,0);
+	vector<unsigned> B;
+	vector<double> A = rotation_matrix(n);
+
+	// graph state loop
+	vector<unsigned> graphs = read_graph_states(file,n);
+
+	unsigned counter = 0;
+	for(auto th : graphs) {
+		cout << "Generate stabiliser states for graph #" << counter << endl;
+		B = generate_gs_Lagrangian(th,n);
+
+		// generate stabiliser states for all possible sign choices and directly project them
+		// note that the state is only added if it not already exists in the set states.
+		for(unsigned s=0; s<S; s++) {
+			tmp_state = generate_stabiliser_state(B, s);
+			tmp_state2 = project_state(tmp_state, n, A);
+
+			// check if projected state tmp_state2 already exists
+			// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than tmp_state2
+			auto it = lower_bound(states.begin(), states.end(), tmp_state2);
+			if(it == states.end() || tmp_state2 < *it) {
+				// the element is new
+				states.insert(it, tmp_state2);
+			}
+			// note that procedures preserves the ordering ... 
+		}
+		++counter;
+	}
+
+	return states;
+}
+
+vector<vector<double>> generate_projected_stabiliser_states_from_graphs_alt(const string file, const unsigned n) {
+
+	// needed later
+	unsigned N = pow(2,n);
+	vector<vector<double>> states;
+	states.reserve(pow(3,n)); // estimated size
+	vector<double> tmp_state (pow(4,n),0);
+	vector<double> tmp_state2 (n,0);
+	vector<unsigned> B (n);
+	vector<unsigned> SB (n);
+
+
+	// generate group generated by local hadmards
+	vector<vector<unsigned>> H_group = { vector<unsigned>({0b10,0b01}), vector<unsigned>({0b01,0b10}) };
+
+	vector<vector<unsigned>> LH_group (N);
+	vector<vector<unsigned>> Slist (n);
+	for(unsigned i=0; i<N; i++) {
+		for(unsigned j=0; j<n; j++) {
+			Slist.at(j) = H_group.at(get_bit(i, j, n));
+		}
+		LH_group.at(i) = direct_sum(Slist);
+	}
+
+	// graph state loop
+	vector<unsigned> graphs = read_graph_states(file,n);
+
+	unsigned counter = 0;
+	for(auto th : graphs) {
+		cout << "Generate stabiliser states for graph #" << counter << endl;
+		B = generate_gs_Lagrangian(th,n);
+
+		// we have to take the local Hadamard orbit of that Lagrangian
+		for(auto S : LH_group) {
+			for(unsigned k=0; k<n; k++) {
+				SB.at(k) = matrix_vector_prod_mod2(S, B.at(k));
+			}
+
+			// generate stabiliser states for all possible sign choices and directly project them
+			// note that the state is only added if it not already exists in the set states.
+			for(unsigned s=0; s<N; s++) {
+				tmp_state = generate_stabiliser_state(SB, s);
+				tmp_state2 = project_state_alt(tmp_state, n);
+
+				// check if projected state tmp_state2 already exists
+				// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than tmp_state2
+				auto it = lower_bound(states.begin(), states.end(), tmp_state2);
+				if(it == states.end() || tmp_state2 < *it) {
+					// the element is new
+					states.insert(it, tmp_state2);
+				}
+				// note that procedures preserves the ordering ... 
+			}
+		}
+		++counter;
+	}
+
+	return states;
+}
+
 
 
 // This function tries to balance time and space complexity by using a std::vector that consumes about mem_size memory. Every couple of iterations, duplicates are deleted from that vector.
