@@ -32,8 +32,8 @@ GLPKFormat to_GLPK_format(SparseMatrix<double,RowMajor>& other, bool transpose=f
 
 	if(transpose==true) {
 		ret.non_zeros = other.nonZeros();
-		ret.ncols = other.cols();
-		ret.nrows = other.rows();
+		ret.ncols = other.rows();
+		ret.nrows = other.cols();
 	}
 	else {
 		ret.non_zeros = other.nonZeros();

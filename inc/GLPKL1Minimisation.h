@@ -65,22 +65,27 @@ protected:
 		string s;
 
 		// setting up rows
-		glp_add_rows(_lp, _dim + 2*nvertices);
+		glp_add_rows(_lp, _dim + 2*nvertices + 1);
 		for(int i=1; i<=_dim; i++) {
 			s = "y" + to_string(i);
 			glp_set_row_name(_lp, i, s.c_str());
 			glp_set_row_bnds(_lp, i, GLP_FX, 0.0, 0.0); // fixed bound
 		}
 		for(int i=1; i<=nvertices; i++) {
-			s = "rx" + to_string(i);
+			s = "r+" + to_string(i);
 			glp_set_row_name(_lp, _dim+i, s.c_str());
 			glp_set_row_bnds(_lp, _dim+i, GLP_UP, 0.0, 0.0); // upper bound 0
 		}
 		for(int i=1; i<=nvertices; i++) {
-			s = "rs" + to_string(i);
+			s = "r-" + to_string(i);
 			glp_set_row_name(_lp, _dim+nvertices+i, s.c_str());
 			glp_set_row_bnds(_lp, _dim+nvertices+i, GLP_LO, 0.0, 0.0); // lower bound 0
 		}
+
+		// normalisation constraint
+		s = "x norm.";
+		glp_set_row_name(_lp, _dim+2*nvertices+1, s.c_str());
+		glp_set_row_bnds(_lp, _dim+2*nvertices+1, GLP_FX, 1.0, 0.0); // fixed bound
 
 
 		// setting up cols 
@@ -125,6 +130,14 @@ protected:
 			val.at(2) = 1;
 			glp_set_mat_row(_lp, nvertices+_dim+i, 2, ind.data(), val.data());
 		}
+
+		// add another constraint such that the x's add up to 1
+		ind = vector<int>(nvertices+1,0);
+		val = vector<double>(nvertices+1,1);
+		for(int i=1; i<=nvertices; i++) {
+			ind.at(i) = i;
+		}
+		glp_set_mat_row(_lp, _dim+2*nvertices+1, nvertices, ind.data(), val.data());
 
 	}
 
@@ -261,6 +274,35 @@ public:
 		cout << "  Vertices: " << get_nvertices() << endl;
 		cout << "  Non-Zeros in the constraint matrix: " << get_nnz() << endl;
 		cout << "---------------------------------------" << endl;
+	}
+
+	void write_constraint_matrix(string outfile) {
+		ofstream fout (outfile);
+
+		int nrows = glp_get_num_rows(_lp);
+		int nvertices = get_nvertices();
+
+		int *ind = new int[nvertices+1];
+		double *val = new double[nvertices+1];
+		int len;
+
+		if(fout.is_open()) {
+			for(unsigned i = 1; i <= nrows; i++) {
+				// get row
+				len = glp_get_mat_row(_lp, i, ind, val);
+
+				for(unsigned j=1; j<=len; j++) {
+					fout << i << " " << ind[j] << " " << scientific << val[j] << endl;
+				}
+			}
+			fout.close();
+		}
+		else {
+			cout << "Error in GLPKL1Minimisation::write_constraint_matrix : Couldn't open file " + outfile + " for writing" << endl;
+		}
+
+		delete[] ind;
+		delete[] val;
 	}
 };
 

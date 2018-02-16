@@ -315,7 +315,9 @@ public:
 					// restore row
 					glp_set_mat_row(_lp, point+1, _dim+1, _ind.data(), _y.data());
 
-					return ret;
+					// return ret;
+					++point;
+					continue;
 				}
 
 				ret = get_status();
@@ -327,7 +329,9 @@ public:
 					// restore row
 					glp_set_mat_row(_lp, point+1, _dim+1, _ind.data(), _y.data());
 
-					return ret;
+					// return ret;
+					++point;
+					continue;
 				}
 
 				// check result and delete if necessary

@@ -66,7 +66,7 @@ try {
 
 	TCLAP::SwitchArg Quiet_arg ("Q","Quiet","Suppress detailed output to files", cmd, false);
 
-	TCLAP::ValueArg<bool> project_arg ("p","project", "Boolean variable which decides whether to project the states or not.", false, true, "Bool");
+	TCLAP::ValueArg<bool> project_arg ("p","project", "Boolean variable which decides whether to deal with projected states or not.", false, true, "Bool");
 	cmd.add(project_arg);
 
 	vector<string> allowed2 = {"simplex", "interior_point"};

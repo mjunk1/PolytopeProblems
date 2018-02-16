@@ -8,6 +8,7 @@
 #include "symplectic.h"
 #include "utilities.h"
 #include "stabiliser.h"
+#include "GLPKConvexSeparation.h"
 
 
 using namespace std;
@@ -56,10 +57,12 @@ try {
 
 
 // ----------------------------------
-// ------ start computation
+// ------ start generation
 // ----------------------------------
 
+cout << "------------------------------------------------------------" << endl;
 cout << "Generate projected stabiliser states from graphs for n = " << n << endl;
+cout << "------------------------------------------------------------" << endl;
 
 // timing
 auto t1 = chrono::high_resolution_clock::now();
@@ -93,5 +96,28 @@ if(fout.is_open()) {
 
 fout.close();
 
+
+
+// ----------------------------------
+// ----- start elimination
+// ----------------------------------
+
+cout << endl;
+cout << "-------------------------------------------------" << endl;
+cout << "Eliminate redundant points from the generated set" << endl;
+cout << "-------------------------------------------------" << endl;
+cout << endl;
+
+GLPKConvexSeparation lp (outfile);
+lp.set_verbosity(1);
+int ret_status;
+
+lp.print_parameters();
+unsigned nvertices = lp.get_nvertices();
+lp.delete_redundant_points();
+cout << "Deleted " << nvertices - lp.get_nvertices() << " points." << endl;
+lp.print_parameters();
+
+lp.write_constraint_matrix(outfile+".red");
 
 }

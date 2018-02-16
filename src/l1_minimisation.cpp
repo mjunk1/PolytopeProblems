@@ -66,7 +66,7 @@ try {
 // ----------------------------------
 
 GLPKL1Minimisation lp (cmatrix_file);
-lp.set_verbosity(2);
+lp.set_verbosity(3);
 lp.print_parameters();
 
 // ----------------------------------
@@ -92,5 +92,7 @@ double ROM = lp.get_obj_value();
 
 cout << "ROM(H^" << nqubits << ")^(1/" << nqubits <<  ") = " << scientific << pow(ROM,1/(double)nqubits) << endl;
 
+// lp.write_constraint_matrix("cmatrix.out");
+// lp.write_sol("sol.out");
 
 }
