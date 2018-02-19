@@ -25,6 +25,7 @@ using namespace Eigen;
 */
 
 
+
 // ----- helpers
 
 // samples a random discrete probability distribution of length n

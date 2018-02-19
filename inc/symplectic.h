@@ -33,6 +33,14 @@ using namespace std;
 //
 
 
+// ---- typedefs
+
+// type that is used to represent binary vectors in phase space
+// note that for n qubits, the binary vector corresponds to a sequence of 2n bits, so we use by default unsigned long which can represent 32 bits, so works definitely for up to n=16
+typedef unsigned long binvec;
+typedef unsigned binvec_short;
+
+
 // ---- For working on finite fields
 
 // actually returns the modulus instead of remainder
