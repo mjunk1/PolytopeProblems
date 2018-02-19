@@ -229,7 +229,7 @@ vector<double> H_state_rotated(const unsigned n) {
 vector<double> H_state_nb(const unsigned n, const double p = 0) {
 	vector<double> ret (n);
 	for(unsigned i=1; i<n+1; i++) {
-		ret.at(i-1) = (1-p)*binomial_coeff(n,i);
+		ret.at(i-1) = (1-p)*pow(sqrt(2),i)*binomial_coeff(n,i);
 	}
 	return ret;
 }
@@ -410,7 +410,7 @@ vector<double> generate_stabiliser_state(const vector<unsigned> &B, const unsign
 		phase = mod(phi(avec,n),4);
 		assert(phase==0 || phase==2);
 		if(phase == 2) {
-			phase = -1;
+			phase = 1;
 		}
 		else {
 			phase = 0;
@@ -598,6 +598,57 @@ vector<double> project_state_alt(const vector<double> &state, const unsigned n) 
 	return pr_state;
 }
 
+vector<double> project_state_alt(const vector<unsigned> &B, const unsigned s) {
+	// --- variables
+	unsigned n = B.size();
+	vector<double> pr_state (n,0.); // 0th component is ommited since it is forced to be 1 
+	vector<unsigned> avec (n,0);
+	vector<unsigned> weights (4,0);
+	unsigned phase, aa, k;
+
+	// --- loop over all points a in the Lagrangian (except 0)
+	for(unsigned a=1; a<pow(2,n); a++) {
+		aa = 0;
+
+		// ----- determine the Fock component the Pauli component contributes to 
+
+		// get coordinates w.r.t. the canonical basis
+		for(unsigned i=0; i<n; i++) {
+			avec.at(i) = get_bit(a,i,n) * B.at(i);
+			aa ^= avec.at(i); 
+		}
+
+		// Compute the weights. Only points with zero Z weight have to be considered
+		weights = count_weights(aa,n);
+		if(weights.at(2) == 0) {
+			// determine the Fock component to which the Pauli component conributes to
+			k = weights.at(1) + weights.at(3);
+			if(k > 0) {
+				// compute Pauli component of the state corresponding to a, this is just given by a phase
+
+				// compute the "Lagrangian" phase phi which is i^phi with phi=0,2,4,...
+				// we will write it as i^phi = (-1)^(phi/2)
+				phase = phi(avec,n); 
+				phase /= 2; 
+
+				// explicit stabiliser phase which is inner product of a and s 
+				phase += parity(a&s); 
+
+				// add it to the k-th component
+				pr_state.at(k-1) += pow(-1,phase);
+			}
+		}
+
+	}
+
+	// normalise
+	// for(unsigned k=1; k<=n; k++) {
+	// 	pr_state.at(k-1) /= pow(sqrt(2),k);
+	// }
+
+	return pr_state;
+}
+
 
 vector<vector<double>> generate_projected_stabiliser_states_from_graphs(const string file, const unsigned n) {
 
@@ -605,8 +656,7 @@ vector<vector<double>> generate_projected_stabiliser_states_from_graphs(const st
 	unsigned N = pow(2,n);
 	vector<vector<double>> states;
 	states.reserve(pow(3,n)); // estimated size
-	vector<double> tmp_state (pow(4,n),0);
-	vector<double> tmp_state2 (n,0);
+	vector<double> tmp_state (n,0);
 	vector<unsigned> B (n);
 	vector<unsigned> SB (n);
 
@@ -642,16 +692,14 @@ vector<vector<double>> generate_projected_stabiliser_states_from_graphs(const st
 			// generate stabiliser states for all possible sign choices and directly project them
 			// note that the state is only added if it not already exists in the set states.
 			for(unsigned s=0; s<N; s++) {
-				tmp_state = generate_stabiliser_state(SB, s);
-				// tmp_state = generate_stabiliser_state(B, s);
-				tmp_state2 = project_state_alt(tmp_state, n);
+				tmp_state = project_state_alt(SB, s);
 
 				// check if projected state tmp_state2 already exists
 				// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than tmp_state2
-				auto it = lower_bound(states.begin(), states.end(), tmp_state2);
-				if(it == states.end() || tmp_state2 < *it) {
+				auto it = lower_bound(states.begin(), states.end(), tmp_state);
+				if(it == states.end() || tmp_state < *it) {
 					// the element is new
-					states.insert(it, tmp_state2);
+					states.insert(it, tmp_state);
 				}
 				// note that procedures preserves the ordering ... 
 			}

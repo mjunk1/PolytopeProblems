@@ -190,7 +190,8 @@ unsigned zx_to_product_coordinates(const unsigned x, const unsigned n) {
 	return matrix_vector_prod_mod2(coord_matrix(n), x);
 }
 
-// counts 1,X,Y,Z weight of the Pauli operator that corresponds to the phase space point a
+// counts weights of the Pauli operator that corresponds to the phase space point a
+// note that the order is 1,X,Z,Y
 vector<unsigned> count_weights(const unsigned a, const unsigned n) {
 	unsigned ai;
 	vector<unsigned> weights(4,0);
