@@ -51,7 +51,7 @@ int mod(int x, int m) {
 
 // ---- Phase space methods
 
-unsigned eta(const unsigned a, const unsigned b, const unsigned n) {
+unsigned eta(const binvec a, const binvec b, const unsigned n) {
 	// Computes the phase that is appearing in definition of Weyl operators:
 	//		W(a) = i^{-\eta(a,a)} Z(a_z)X(a_x)
 	// \eta is actually a Z_4-valued function.
@@ -63,14 +63,14 @@ unsigned eta(const unsigned a, const unsigned b, const unsigned n) {
 	return ret;
 }
 
-int phi(const unsigned a, const unsigned b, const unsigned n) {
+int phi(const binvec a, const binvec b, const unsigned n) {
 	// Computes the phase that is appearing in the composition law of Weyl operators:
 	//		W(a)W(b) = i^{\phi(a,b)} W(a+b)
 	// \phi is actually a Z_4-valued function.
 	return ( 2*eta(a,b,n) + eta(a^b,a^b,n) - eta(a,a,n) - eta(b,b,n) );
 }
 
-int phi(const vector<unsigned> a, const unsigned n) {
+int phi(const vector<binvec> a, const unsigned n) {
 	// Compute the phase that is appearing in the product of many Weyl operators
 	//		W(a_1)W(a_2)...W(a_m) = i^{\phi(a_1,...,a_m)}W(a_1+...+a_m)
 	// This phase is given by
@@ -78,7 +78,7 @@ int phi(const vector<unsigned> a, const unsigned n) {
 	//
 	unsigned ret = 0;
 	unsigned m = a.size();
-	unsigned aa;
+	binvec aa;
 
 	// sum up phases
 	for(unsigned j=0; j<m-1; j++) {
@@ -92,7 +92,7 @@ int phi(const vector<unsigned> a, const unsigned n) {
 	return ret;
 }
 
-unsigned symplectic_form(const unsigned a, const unsigned b, const unsigned n) {
+unsigned symplectic_form(const binvec a, const binvec b, const unsigned n) {
 	return ( eta(a,b,n) + eta(b,a,n) )%2;
 }
 
@@ -111,8 +111,8 @@ int convolve_mod2(double *p1, double *p2, double *p3, const unsigned N) {
   return 0;
 }
 
-unsigned matrix_vector_prod_mod2(const unsigned *A, const unsigned x, const unsigned N) {
-	unsigned b = 0;
+binvec matrix_vector_prod_mod2(const binvec *A, const binvec x, const unsigned N) {
+	binvec b = 0;
 
 	/* This performs the formula:
 		b_i = sum_{j=1}^N A_ij x_j
@@ -126,8 +126,8 @@ unsigned matrix_vector_prod_mod2(const unsigned *A, const unsigned x, const unsi
 	return b;	
 }
 
-unsigned matrix_vector_prod_mod2(const vector<unsigned> A, const unsigned x) {
-	unsigned b = 0;
+binvec matrix_vector_prod_mod2(const vector<binvec> A, const binvec x) {
+	binvec b = 0;
 
 	/* This performs the formula:
 		b_i = sum_{j=1}^N A_ij x_j
@@ -143,14 +143,14 @@ unsigned matrix_vector_prod_mod2(const vector<unsigned> A, const unsigned x) {
 	return b;	
 }
 
-vector<unsigned> direct_sum(const vector<unsigned> A1, const vector<unsigned> A2) {
+vector<binvec> direct_sum(const vector<binvec> A1, const vector<binvec> A2) {
 	// Returns the direct sum A1 + A2 of the square matrices A1 and A2
 
 	unsigned n1 = A1.size();
 	unsigned n2 = A2.size();
 
 	// construct new vector
-	vector<unsigned> R (n1+n2);
+	vector<binvec> R (n1+n2);
 
 	for(unsigned j=0; j<n1; j++) {
 		R.at(j) = A1.at(j) << n2; // fills in n2 zeros to the right
@@ -162,8 +162,8 @@ vector<unsigned> direct_sum(const vector<unsigned> A1, const vector<unsigned> A2
 	return R;
 
 }
-vector<unsigned> direct_sum(const vector<vector<unsigned>> Alist) {
-	vector<unsigned> temp = Alist.at(0);
+vector<binvec> direct_sum(const vector<vector<binvec>> Alist) {
+	vector<binvec> temp = Alist.at(0);
 	for(unsigned i=1; i<Alist.size(); i++) {
 		temp = direct_sum(temp, Alist.at(i));
 	}
@@ -171,7 +171,7 @@ vector<unsigned> direct_sum(const vector<vector<unsigned>> Alist) {
 	return temp;
 }
 
-void symplectic_transform(double *pin, double *pout, const unsigned *S, const unsigned n) {
+void symplectic_transform(double *pin, double *pout, const binvec *S, const unsigned n) {
 	unsigned j;
 	for(unsigned i=0; i<pow(4,n); i++) {
 		j = matrix_vector_prod_mod2(S, i, 2U*n);
@@ -179,14 +179,14 @@ void symplectic_transform(double *pin, double *pout, const unsigned *S, const un
 	}
 }
 
-unsigned transvection(const unsigned h, const unsigned x, const unsigned n) {
+binvec transvection(const binvec h, const binvec x, const binvec n) {
 	// returns the transvection of x by h, i.e.
 	//    y = x + [x,h]h
 	return ( x ^ (symplectic_form(x,h,n) * h) );
 }
 
-vector<unsigned> coord_matrix(const unsigned n) {
-	vector<unsigned> M (2*n,0);
+vector<binvec> coord_matrix(const unsigned n) {
+	vector<binvec> M (2*n,0);
 	for(unsigned i=0; i<n; i++) {
 		M[2*i] = set_bit(0, i, 2*n);
 		M[2*i+1] = set_bit(0, n+i, 2*n);
@@ -194,13 +194,13 @@ vector<unsigned> coord_matrix(const unsigned n) {
 	return M;
 }
 
-unsigned zx_to_product_coordinates(const unsigned x, const unsigned n) {
+binvec zx_to_product_coordinates(const binvec x, const unsigned n) {
 	return matrix_vector_prod_mod2(coord_matrix(n), x);
 }
 
 // counts weights of the Pauli operator that corresponds to the phase space point a
 // note that the order is 1,X,Z,Y
-vector<unsigned> count_weights(const unsigned a, const unsigned n) {
+vector<unsigned> count_weights(const binvec a, const unsigned n) {
 	unsigned ai;
 	vector<unsigned> weights(4,0);
 	for(unsigned i=0; i<n; i++) {
@@ -212,7 +212,7 @@ vector<unsigned> count_weights(const unsigned a, const unsigned n) {
 
 // ---- Symplectic group generation
 
-int phase_function(const unsigned a, const unsigned *S, const unsigned n) {
+int phase_function(const binvec a, const binvec *S, const unsigned n) {
 	// represents the phase function g of the trivial Clifford representative C with [C]=S in Sp(2n) = C(n)/P(n). It describes the action of C as follows:
 	//		C W_a C^\dagger = (-1)^{g(a)} W_{Sa} 
 
@@ -223,12 +223,12 @@ int phase_function(const unsigned a, const unsigned *S, const unsigned n) {
 
 	// will be used for a basis expansion of a
 	// we will actually only store set bits in a
-	vector<unsigned> av;
+	vector<binvec> av;
 	av.reserve(2*n);
-	vector<unsigned> bv;
+	vector<binvec> bv;
 	bv.reserve(2*n);
 
-	unsigned aa = a;
+	binvec aa = a;
 	while(aa != 0) {
 		// push back least significant bit
 		av.push_back(aa & ~(aa-1));
@@ -241,7 +241,7 @@ int phase_function(const unsigned a, const unsigned *S, const unsigned n) {
 
 }
 
-int phase_function(const unsigned a, const vector<unsigned> S) {
+int phase_function(const binvec a, const vector<binvec> S) {
 	// represents the phase function g of the trivial Clifford representative C with [C]=S in Sp(2n) = C(n)/P(n). It describes the action of C as follows:
 	//		C W_a C^\dagger = (-1)^{g(a)} W_{Sa} 
 
@@ -254,12 +254,12 @@ int phase_function(const unsigned a, const vector<unsigned> S) {
 
 	// will be used for a basis expansion of a
 	// we will actually only store set bits in a
-	vector<unsigned> av;
+	vector<binvec> av;
 	av.reserve(2*n);
-	vector<unsigned> bv;
+	vector<binvec> bv;
 	bv.reserve(2*n);
 
-	unsigned aa = a;
+	binvec aa = a;
 	while(aa != 0) {
 		// push back least significant bit
 		av.push_back(aa & ~(aa-1));
@@ -281,7 +281,7 @@ unsigned long sp_order(const unsigned n) {
 	return r;
 }
 
-vector<unsigned> find_transvection(const unsigned x, const unsigned y, const unsigned n) {
+vector<binvec> find_transvection(const binvec x, const binvec y, const unsigned n) {
 	// Returns binary vectors h1, h2 (represented as a vector of 2 2n-bit unsigned integers)
 	// such that 
 	//    y = Z(h1)Z(h2)x
@@ -294,21 +294,21 @@ vector<unsigned> find_transvection(const unsigned x, const unsigned y, const uns
 
 	if(x == 0 || y == 0) {
 		// this doesn't work for zero vectors
-		return vector<unsigned>(3,0U);
+		return vector<binvec>(3,0U);
 	}
 	
 	if(x == y) {
 		// return 0
-		return vector<unsigned>(3,0U);
+		return vector<binvec>(3,0U);
 	} 
 
 	if(symplectic_form(x,y,n) == 1) {
 		// return h = x + y (bitwise addition)
-		return vector<unsigned>({0, x^y,1});
+		return vector<binvec>({0, x^y,1});
 	}
 	else {
-		unsigned z = 0; 
-		unsigned xx,yy;
+		binvec z = 0; 
+		binvec xx,yy;
 		for(unsigned i=0; i<n; i++) {
 			// extract bits 2i and 2i+1
 			xx = get_bits(x,2U*i,2U*i+1U,2*n);
@@ -327,7 +327,7 @@ vector<unsigned> find_transvection(const unsigned x, const unsigned y, const uns
 				}
 				// finish construction by shifting the bits in z to position 2i and 2i+1
 				z = z << (2*n-2U*i-2U);
-				return vector<unsigned>({x^z,y^z,2});
+				return vector<binvec>({x^z,y^z,2});
 			}
 		}
 
@@ -361,7 +361,7 @@ vector<unsigned> find_transvection(const unsigned x, const unsigned y, const uns
 		}
 
 		// we need some temporary z
-		unsigned zz = 0;
+		binvec zz = 0;
 
 		// look for a pair 00 in x 
 		for(unsigned i=0; i<n; i++) {
@@ -392,12 +392,12 @@ vector<unsigned> find_transvection(const unsigned x, const unsigned y, const uns
 
 		// finally we "add" z and zz (set bits shall not cancel, hence OR instead of XOR)
 		z = z|zz;
-		return vector<unsigned>({x^z,y^z,3});
+		return vector<binvec>({x^z,y^z,3});
 	}
 
 }
 
-vector<unsigned> generate_symplectic_matrix(const unsigned i, const unsigned n) {
+vector<binvec> generate_symplectic_matrix(const binvec i, const unsigned n) {
 	// Generate the i-th element in Sp(2n, Z_2) using transvections
 	// Actually, returns the transposed element.
 
@@ -405,19 +405,19 @@ vector<unsigned> generate_symplectic_matrix(const unsigned i, const unsigned n) 
 	unsigned s = (1<<nn)-1;
 
 	// first and second basis vectors e1=(1,0,0,...,0), e2=(0,1,0,...,0)
-	unsigned e1 = set_bit(0,0,nn);
-	unsigned e2 = set_bit(0,1,nn);
+	binvec e1 = set_bit(0,0,nn);
+	binvec e2 = set_bit(0,1,nn);
 
 	// compute phase space points
-	unsigned f1 = invert_bits((i%s)+1,nn);
-	unsigned b = invert_bits(i/s,nn-1);
-	unsigned eprime = e1 ^ b;
+	binvec f1 = invert_bits((i%s)+1,nn);
+	binvec b = invert_bits(i/s,nn-1);
+	binvec eprime = e1 ^ b;
 	eprime = reset_bit(eprime,1,nn); // result is (1,0,b1,b2,b3,...,b2n-1)
 
 	// compute and apply transvections
-	vector<unsigned> T = find_transvection(e1,f1,n);
+	vector<binvec> T = find_transvection(e1,f1,n);
 	
-	unsigned h0 = transvection(T.at(1),eprime,n);
+	binvec h0 = transvection(T.at(1),eprime,n);
 	h0 = transvection(T.at(0),h0,n);
 
 	// check 0th bit of b
@@ -430,8 +430,8 @@ vector<unsigned> generate_symplectic_matrix(const unsigned i, const unsigned n) 
 	// f2 = transvection(Tprime.at(1),f2,n);
 	// f2 = transvection(Tprime.at(0),f2,n);
 
-	vector<unsigned> g;
-	vector<unsigned> id = {2,1}; // 2x2 identity matrix
+	vector<binvec> g;
+	vector<binvec> id = {2,1}; // 2x2 identity matrix
 
 	if(n == 1) {
 		g = id;
@@ -442,7 +442,7 @@ vector<unsigned> generate_symplectic_matrix(const unsigned i, const unsigned n) 
 	}
 
 	// finally, apply the transvections to each row in g
-	for(unsigned j=0; j<nn; j++) {
+	for(binvec_short j=0; j<nn; j++) {
 		g[j] = transvection(T.at(1),g[j],n);
 		g[j] = transvection(T.at(0),g[j],n);
 		g[j] = transvection(h0,g[j],n);
@@ -452,7 +452,7 @@ vector<unsigned> generate_symplectic_matrix(const unsigned i, const unsigned n) 
 	return g;
 }
 
-vector<int> projected_liouville_matrix(const vector<unsigned> S, const unsigned a=0) {
+vector<int> projected_liouville_matrix(const vector<binvec> S, const binvec a=0) {
 	// Computes the Liouville matrix of the "canonical" Clifford representative corresponding to the symplectic matrix S, i.e. the one that acts on Z/X Paulis as
 	//		C:  W(e_j) ---> +W(Se_j)
 	// Its action on an arbitrary Pauli operator W(b) is
@@ -466,7 +466,7 @@ vector<int> projected_liouville_matrix(const vector<unsigned> S, const unsigned 
 	unsigned n = S.size()/2;
 	unsigned m = pow(4,n);
 	unsigned i;
-	unsigned Sb;
+	binvec Sb;
 	vector<int> L(4*m-1,0);
 	int ph;
 
@@ -497,7 +497,7 @@ vector<int> projected_liouville_matrix(const vector<unsigned> S, const unsigned 
 }
 
 
-vector<int> liouville_matrix(const vector<unsigned> S, const unsigned c=0) {
+vector<int> liouville_matrix(const vector<binvec> S, const binvec c=0) {
 	// Computes the Liouville matrix of the "trivial" Clifford representative corresponding to the symplectic matrix S, i.e. the one that acts Z/X Paulis as
 	//		C:  W(e_j) ---> +W(Se_j)
 	// Its action on an arbitrary Pauli operator W(b) is
@@ -508,7 +508,7 @@ vector<int> liouville_matrix(const vector<unsigned> S, const unsigned c=0) {
 
 	unsigned n = S.size()/2;
 	unsigned m = 1 << 4*n;	// pow(16,n)
-	unsigned a,b;
+	binvec a,b;
 	vector<int> L(m,0);
 	int ph;
 
