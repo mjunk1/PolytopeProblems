@@ -29,6 +29,7 @@ int main(int argc, char** argv) {
 
 unsigned n;
 string outfile,infile;
+bool elim;
 
 try {
 
@@ -44,12 +45,16 @@ try {
 	TCLAP::ValueArg<string> output_arg ("o", "outfile", "Output file name that will be used for writing the reduced constraint matrix", true, "out.dat", "string");
 	cmd.add(output_arg);
 
+	TCLAP::ValueArg<bool> elim_arg ("e", "elimination", "Flag which determines wether to eliminate redundant points from the set, i.e. those points which are convex combinations of the others.", true, "true", "Boolean");
+	cmd.add(elim_arg);
+
 
 	cmd.parse(argc, argv);
 
 	n = nqubits_arg.getValue();
 	outfile = output_arg.getValue();
 	infile = input_arg.getValue();
+	elim = elim_arg.getValue();
 
 } catch (TCLAP::ArgException &e) { 
 	cerr << "Error: " << e.error() << " for arg " << e.argId() << endl; 
@@ -98,27 +103,35 @@ if(fout.is_open()) {
 fout.close();
 
 
-
 // ----------------------------------
 // ----- start elimination
 // ----------------------------------
 
-cout << endl;
-cout << "-------------------------------------------------" << endl;
-cout << "Eliminate redundant points from the generated set" << endl;
-cout << "-------------------------------------------------" << endl;
-cout << endl;
+if(elim == true) {
 
-GLPKConvexSeparation lp (outfile);
-lp.set_verbosity(1);
-int ret_status;
+	// free memory
+	pr_states.clear();
+	pr_states.resize(0);
+	pr_states.shrink_to_fit();
 
-lp.print_parameters();
-unsigned nvertices = lp.get_nvertices();
-lp.delete_redundant_points();
-cout << "Deleted " << nvertices - lp.get_nvertices() << " points." << endl;
-lp.print_parameters();
+	cout << endl;
+	cout << "-------------------------------------------------" << endl;
+	cout << "Eliminate redundant points from the generated set" << endl;
+	cout << "-------------------------------------------------" << endl;
+	cout << endl;
 
-lp.write_constraint_matrix(outfile+".red");
+	GLPKConvexSeparation lp (outfile);
+	lp.set_verbosity(1);
+	int ret_status;
+
+	lp.print_parameters();
+	unsigned nvertices = lp.get_nvertices();
+	lp.delete_redundant_points();
+	cout << "Deleted " << nvertices - lp.get_nvertices() << " points." << endl;
+	lp.print_parameters();
+
+	lp.write_constraint_matrix(outfile+".red");
+
+}
 
 }
