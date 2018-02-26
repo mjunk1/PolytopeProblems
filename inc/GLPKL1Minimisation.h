@@ -43,7 +43,7 @@ protected:
 
 
 	// this updates the GLPK problem using the GLPKFormat struct data
-	void update_problem(GLPKFormat data) {
+	void update_problem(GLPKFormat& data) {
 		// ----- create GLPK problem 
 
 		unsigned nnz = data.non_zeros;

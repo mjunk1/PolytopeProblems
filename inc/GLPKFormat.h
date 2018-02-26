@@ -182,7 +182,7 @@ GLPKFormat to_GLPK_format(string cmatrix_file, bool transpose=false) {
 // 	return ret;
 // }
 
-void print(GLPKFormat data) {
+void print(GLPKFormat& data) {
 	// GLPK = 1-based indexing
 	unsigned k=1;
 	for(unsigned i=1; i<=data.nrows; i++) {
