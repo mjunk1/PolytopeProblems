@@ -57,9 +57,11 @@ protected:
 	unsigned _max_iter = 50;
 	double _precision = 1e-6;
 
+	// optional vector of strings that identify the vertices 
+	vector<string> _id_list = NULL;
+
 	// output
 	unsigned _verbose = 2;
-
 
 	// this updates the GLPK problem using the GLPKFormat struct data
 	void update_problem(GLPKFormat& data) {
@@ -85,13 +87,15 @@ protected:
 
 		// setting up rows
 		glp_add_rows(_lp, nvertices+1);
+
+		glp_set_row_name(_lp, 1, "q");
+		glp_set_row_bnds(_lp, 1, GLP_UP, 0.0, 1.0);
 		for(int i=1; i<=nvertices; i++) {
 			s = "p" + to_string(i);
-			glp_set_row_name(_lp, i, s.c_str());
-			glp_set_row_bnds(_lp, i, GLP_UP, 0.0, 0.0);
+			glp_set_row_name(_lp, i+1, s.c_str());
+			glp_set_row_bnds(_lp, i+1, GLP_UP, 0.0, 0.0);
 		}
-		glp_set_row_name(_lp, nvertices+1, "q");
-		glp_set_row_bnds(_lp, nvertices+1, GLP_UP, 0.0, 1.0);
+		
 
 		// setting up cols 
 		glp_add_cols(_lp, _dim+1);
@@ -105,7 +109,11 @@ protected:
 		glp_set_col_bnds(_lp, _dim+1, GLP_FR, 0.0, 0.0);
 
 		// setting up constraint matrix
-		glp_load_matrix(_lp, nnz, data.rows.data(), data.cols.data(), data.values.data());
+		vector<int> rows = data.rows;
+		for(unsigned i=0; i<rows.size(); i++){
+			++rows.at(i); // vertex matrix starts at row #2
+		}
+		glp_load_matrix(_lp, nnz, rows.data(), data.cols.data(), data.values.data());
 
 		// setting last column
 		vector<int> ind (nvertices+2);
@@ -135,6 +143,56 @@ public:
 	GLPKConvexSeparation() {
 		// setting parameter struct to default values
 		glp_init_smcp(&_parm);
+	}
+
+	GLPKConvexSeparation(unsigned dimension) {
+		// setting parameter struct to default values
+		glp_init_smcp(&_parm);
+
+		// ----- create empty GLPK problem of required dimension
+		_dim = dimension;
+
+		// create new problem
+		if(_lp != nullptr) {
+			glp_erase_prob(_lp);
+		}
+		else {
+			_lp = glp_create_prob();
+		}
+
+		// set up problem parameters
+		glp_set_prob_name(_lp, "Polytope membership");
+		glp_set_obj_dir(_lp, GLP_MAX);
+
+		string s;
+
+		// setting up rows
+		glp_add_rows(_lp, 1);
+		glp_set_row_name(_lp, 1, "q");
+		glp_set_row_bnds(_lp, 1, GLP_UP, 0.0, 1.0);
+
+		// setting up cols 
+		glp_add_cols(_lp, _dim+1);
+		for(int j=1; j<=_dim; j++) {
+			s = "x" + to_string(j);
+			glp_set_col_name(_lp, j, s.c_str());
+			glp_set_col_bnds(_lp, j, GLP_FR, 0.0, 0.0);
+		}
+		s = "x0";
+		glp_set_col_name(_lp, _dim+1, s.c_str());
+		glp_set_col_bnds(_lp, _dim+1, GLP_FR, 0.0, 0.0);
+
+
+		// ----- additional preparation
+
+		// preparing coordinates of the point to check
+		_y.resize(_dim+2);
+		_y.at(_dim+1) = -1.;
+
+		// some helper stuff for GLPK
+		_ind.resize(_dim+2);
+		for(int i=0; i<=_dim+1; i++)
+			_ind.at(i) = i;
 	}
 
 	GLPKConvexSeparation(string cmatrix_file) {
@@ -188,8 +246,37 @@ public:
 		// make sure last element is -1
 		_y.at(_dim+1) = -1.;
 
-		// replacing the last row of the constraint matrix
-		glp_set_mat_row(_lp, get_nvertices()+1, _dim+1, _ind.data(), _y.data());
+		// replacing the first row of the constraint matrix
+		glp_set_mat_row(_lp, 1, _dim+1, _ind.data(), _y.data());
+
+		// setting up objective function
+		for(int j=1; j<=_dim+1; j++) 
+			glp_set_obj_coef(_lp, j, _y.at(j));
+
+
+		// changes in the constraint matrix generally invalides the basis factorization
+		//if(glp_bf_exists(_lp) == 0)
+		//	glp_factorize(_lp);
+		// glp_warm_up(_lp);
+		glp_std_basis(_lp);
+		
+		// solve
+		_glp_ret = glp_simplex(_lp, &_parm);
+
+		return _glp_ret;
+	}
+
+	int check_point(vector<int> &y) {
+		assert(y.size() == _dim);
+			
+		// copying y
+		copy(y.begin(), y.end(), _y.begin()+1);
+
+		// make sure last element is -1
+		_y.at(_dim+1) = -1.;
+
+		// replacing the first row of the constraint matrix
+		glp_set_mat_row(_lp, 1, _dim+1, _ind.data(), _y.data());
 
 		// setting up objective function
 		for(int j=1; j<=_dim+1; j++) 
@@ -269,7 +356,7 @@ public:
 	void delete_point(unsigned number) {
 		assert(number < get_nvertices());
 
-		const int nums[] = {0, (int)(number+1)};
+		const int nums[] = {0, (int)(number+2)};
 		glp_del_rows(_lp, 1, nums);
 	}
 
@@ -299,7 +386,7 @@ public:
 				y = get_vertex(point);
 
 				// temporarily set the i-th row to zero (remove the constraint corresponding to the vertex candidate)
-				glp_set_mat_row(_lp, point+1, 0, NULL, NULL);
+				glp_set_mat_row(_lp, point+2, 0, NULL, NULL);
 
 
 				// now check if our point is in the convex hull of all the other points
@@ -313,7 +400,7 @@ public:
 					}
 
 					// restore row
-					glp_set_mat_row(_lp, point+1, _dim+1, _ind.data(), _y.data());
+					glp_set_mat_row(_lp, point+2, _dim+1, _ind.data(), _y.data());
 
 					// return ret;
 					++point;
@@ -327,7 +414,7 @@ public:
 					}
 
 					// restore row
-					glp_set_mat_row(_lp, point+1, _dim+1, _ind.data(), _y.data());
+					glp_set_mat_row(_lp, point+2, _dim+1, _ind.data(), _y.data());
 
 					// return ret;
 					++point;
@@ -337,7 +424,7 @@ public:
 				// check result and delete if necessary
 				if(get_obj_value() > 0){
 					// it is not redundant, restore row
-					glp_set_mat_row(_lp, point+1, _dim+1, _ind.data(), _y.data());	
+					glp_set_mat_row(_lp, point+2, _dim+1, _ind.data(), _y.data());	
 
 					// check the next point in the next loop
 					++point;
@@ -370,14 +457,73 @@ public:
 		return 0;
 	}
 
+	int add_vertex(vector<double> &v) {
+		// returns 0 if vertex was added and 1 otherwise
+
+		// check if vertex is not already in the convex hull
+		check_point(v);
+		if(get_obj_value() > 0) {
+			// adding a row
+			unsigned i = get_nvertices()+1;
+			string s = "p" + to_string(i);
+
+			glp_add_rows(_lp, 1);		
+			glp_set_row_name(_lp, i+1, s.c_str());
+			glp_set_row_bnds(_lp, i+1, GLP_UP, 0.0, 0.0);
+
+			// adding data
+			vector<double> row(_dim+2);
+
+			copy(v.begin(), v.end(), row.begin()+1);
+			row.at(_dim+1) = -1.;
+
+			// replacing the (i+2)-th row of the constraint matrix
+			glp_set_mat_row(_lp, i+2, _dim+1, _ind.data(), _y.data());
+
+			return 0;
+		}
+		else {
+			return 1;
+		}
+	}
+
+	int add_vertex(vector<int> &v) {
+		// returns 0 if vertex was added and 1 otherwise
+
+		// check if vertex is not already in the convex hull
+		check_point(v);
+		if(get_obj_value() > 0) {
+			// adding a row
+			unsigned i = get_nvertices();
+			string s = "p" + to_string(i+1);
+
+			glp_add_rows(_lp, 1);		
+			glp_set_row_name(_lp, i+2, s.c_str());
+			glp_set_row_bnds(_lp, i+2, GLP_UP, 0.0, 0.0);
+
+			// adding data
+			vector<double> row(_dim+2);
+			copy(v.begin(), v.end(), row.begin()+1);
+			row.at(_dim+1) = -1.;
+
+			// replacing the (i+2)-th row of the constraint matrix
+			glp_set_mat_row(_lp, i+2, _dim+1, _ind.data(), _y.data());
+
+			return 0;
+		}
+		else {
+			return 1;
+		}
+	}
+
+	void set_id_list(vector<string> id_list) {
+		assert(id_list.size() == get_nvertices());
+		_id_list = id_list;
+	}
 
 	// get methods
 	double get_obj_value() {
 		return glp_get_obj_val(_lp);
-		// if(_method == "simplex")
-		// 	return glp_get_obj_val(_lp);
-		// else
-		// 	return glp_ipt_obj_val(_lp);
 	}
 
 	// vector<double> get_opt_solution() {
@@ -392,7 +538,7 @@ public:
 
 		int *ind = new int[_dim+2];
 		double *val = new double[_dim+2];
-		int len = glp_get_mat_row(_lp, i+1, ind, val);
+		int len = glp_get_mat_row(_lp, i+2, ind, val);
 
 		for(unsigned j=1; j<=len; j++){
 			if(ind[j] <= _dim)
@@ -472,11 +618,11 @@ public:
 		if(fout.is_open()) {
 			for(unsigned i = 1; i <= get_nvertices(); i++) {
 				// get row
-				len = glp_get_mat_row(_lp, i, ind, val);
+				len = glp_get_mat_row(_lp, i+1, ind, val);
 
 				for(unsigned j=1; j<=len; j++) {
 					if(ind[j] <= _dim) {
-						fout << i << " " << ind[j] << " " << scientific << val[j] << endl;
+						fout << i << " " << ind[j] << " " << val[j] << endl;
 					}
 				}
 			}
@@ -484,6 +630,46 @@ public:
 		}
 		else {
 			cout << "Error in GLPKConvexSeparation::write_constraint_matrix : Couldn't open file " + outfile + " for writing" << endl;
+		}
+
+		delete[] ind;
+		delete[] val;
+	}
+
+	void write_dense_constraint_matrix(string outfile) {
+		ofstream fout (outfile);
+
+		int *ind = new int[_dim+2];
+		double *val = new double[_dim+2];
+		int len;
+		bool flag;
+
+		if(fout.is_open()) {
+			for(unsigned i = 1; i <= get_nvertices(); i++) {
+				// get row
+				len = glp_get_mat_row(_lp, i+1, ind, val);
+
+				for(unsigned j=1; j<=_dim; j++) {
+					flag = false;
+					for(unsigned idx=1; idx<=len; idx++) {
+						if(ind[idx] == j) {
+							fout << val[idx] << " ";
+							++idx;
+							flag = true;
+							break;
+						}
+					}
+					
+					if(flag == false) {
+						fout << 0 << " ";
+					}
+				}
+				fout << endl;
+			}
+			fout.close();
+		}
+		else {
+			cout << "Error in GLPKConvexSeparation::write_dense_constraint_matrix : Couldn't open file " + outfile + " for writing" << endl;
 		}
 
 		delete[] ind;

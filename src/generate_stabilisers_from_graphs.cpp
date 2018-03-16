@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <chrono>
 
-
 #include "symplectic.h"
 #include "utilities.h"
 #include "stabiliser.h"
@@ -12,6 +11,7 @@
 
 
 using namespace std;
+
 
 /* input to the program:
 
@@ -83,8 +83,9 @@ chrono::duration<double, milli> fp_ms = t2 - t1;
 cout << "Found " << pr_states.size() << " images." << endl;
 cout << "Generation took " <<  fp_ms.count() << " ms." << endl;
 
-// save states to file
-fstream fout(outfile, ios::out);
+
+// save states to file in sparse COO format
+fstream fout(outfile+".coo", ios::out);
 unsigned j = 1;
 
 if(fout.is_open()) {
@@ -92,14 +93,13 @@ if(fout.is_open()) {
 	for(auto state : pr_states) {
 		for(unsigned k=0; k<state.size(); k++) {
 			if(state.at(k) != 0) {
-				fout << j << " " << k+1 << " " << scientific << state.at(k) << endl;
+				fout << j << " " << k+1 << " " << state.at(k) << endl;
 			}
 		}
 		++j;
 	}
 
 }
-
 fout.close();
 
 
@@ -108,7 +108,6 @@ fout.close();
 // ----------------------------------
 
 if(elim == true) {
-
 	// free memory
 	pr_states.clear();
 	pr_states.resize(0);
@@ -120,7 +119,7 @@ if(elim == true) {
 	cout << "-------------------------------------------------" << endl;
 	cout << endl;
 
-	GLPKConvexSeparation lp (outfile);
+	GLPKConvexSeparation lp (outfile+".coo");
 	lp.set_verbosity(1);
 	int ret_status;
 
@@ -130,7 +129,8 @@ if(elim == true) {
 	cout << "Deleted " << nvertices - lp.get_nvertices() << " points." << endl;
 	lp.print_parameters();
 
-	lp.write_constraint_matrix(outfile+".red");
+	lp.write_constraint_matrix(outfile+"_red.coo");
+	lp.write_dense_constraint_matrix(outfile+"_red.mat");
 
 }
 

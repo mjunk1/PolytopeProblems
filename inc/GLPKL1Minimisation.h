@@ -260,8 +260,25 @@ public:
 
 
 	// output methods
+	void write_glpk_output(string outfile) {
+		glp_print_sol(_lp, outfile.c_str());		
+	}
+
 	void write_sol(string outfile) {
-		glp_print_sol(_lp, outfile.c_str());
+		// write solution from GLPK object
+		ofstream fout (outfile);
+		unsigned M = get_nvertices();
+
+		if(fout.is_open()) {
+			for(unsigned i=1; i<=M; i++) {
+				fout << glp_get_col_prim(_lp, i) << endl;
+			}
+			fout.close();
+		}
+		else {
+			cout << "Error in GLPKL1Minimisation::write_sol : Couldn't open file " + outfile + " for writing" << endl;
+		}
+
 	}
 
 	void print_parameters() {

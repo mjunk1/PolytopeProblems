@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
 // ----------------------------------
 
 string cmatrix_file;
-string output_prefix;
+string outfile;
 bool Quiet;
 unsigned nqubits;
 bool project;
@@ -41,7 +41,7 @@ try {
 	TCLAP::ValueArg<string> input_arg ("f", "file", "Input file that contains the coordinates of the vertices as a sparse matrix with rows of the form i j a[i,j]", true, " ", "string");
 	cmd.add(input_arg);
 
-	TCLAP::ValueArg<string> output_arg ("o", "out_prefix", "Prefix that will be used for output files", false, "out_", "string");
+	TCLAP::ValueArg<string> output_arg ("o", "outfile", "Name that will be used for output files", false, "solution.dat", "string");
 	cmd.add(output_arg);
 
 
@@ -53,7 +53,7 @@ try {
 	cmd.parse(argc, argv);
 
 	cmatrix_file = input_arg.getValue();
-	output_prefix = output_arg.getValue();
+	outfile = output_arg.getValue();
 	Quiet = Quiet_arg.getValue();
 	project = project_arg.getValue();
 
@@ -90,9 +90,11 @@ double ROM = lp.get_obj_value();
 
 
 
-cout << "ROM(H^" << nqubits << ")^(1/" << nqubits <<  ") = " << scientific << pow(ROM,1/(double)nqubits) << endl;
+cout << "ROM(H^" << nqubits << ") = " << scientific << ROM << endl;
 
-// lp.write_constraint_matrix("cmatrix.out");
-// lp.write_sol("sol.out");
+
+// write solution
+lp.write_glpk_output(outfile);
+lp.write_sol(outfile+".sol");
 
 }
