@@ -58,7 +58,7 @@ protected:
 	double _precision = 1e-6;
 
 	// optional vector of strings that identify the vertices 
-	vector<string> _id_list = NULL;
+	vector<string> _labels;
 
 	// output
 	unsigned _verbose = 2;
@@ -358,6 +358,10 @@ public:
 
 		const int nums[] = {0, (int)(number+2)};
 		glp_del_rows(_lp, 1, nums);
+
+		// delete the label, too
+		// cout << "Delete point with label " << _labels.at(number) << endl;
+		_labels.erase(_labels.begin()+number);
 	}
 
 	int delete_redundant_points(unsigned max_loops=1) {
@@ -457,7 +461,7 @@ public:
 		return 0;
 	}
 
-	int add_vertex(vector<double> &v) {
+	int add_vertex(vector<double> &v, string label="") {
 		// returns 0 if vertex was added and 1 otherwise
 
 		// check if vertex is not already in the convex hull
@@ -480,6 +484,9 @@ public:
 			// replacing the (i+2)-th row of the constraint matrix
 			glp_set_mat_row(_lp, i+2, _dim+1, _ind.data(), _y.data());
 
+			// adding the label
+			_labels.push_back(label);
+
 			return 0;
 		}
 		else {
@@ -487,7 +494,7 @@ public:
 		}
 	}
 
-	int add_vertex(vector<int> &v) {
+	int add_vertex(vector<int> &v, string label="") {
 		// returns 0 if vertex was added and 1 otherwise
 
 		// check if vertex is not already in the convex hull
@@ -509,6 +516,9 @@ public:
 			// replacing the (i+2)-th row of the constraint matrix
 			glp_set_mat_row(_lp, i+2, _dim+1, _ind.data(), _y.data());
 
+			// adding the label
+			_labels.push_back(label);
+
 			return 0;
 		}
 		else {
@@ -516,9 +526,9 @@ public:
 		}
 	}
 
-	void set_id_list(vector<string> id_list) {
-		assert(id_list.size() == get_nvertices());
-		_id_list = id_list;
+	void set_labels(vector<string> labels) {
+		assert(labels.size() == get_nvertices());
+		_labels = labels;
 	}
 
 	// get methods
@@ -568,6 +578,10 @@ public:
 
 	unsigned get_nnz() {
 		return glp_get_num_nz(_lp);
+	}
+
+	vector<string> get_labels() {
+		return _labels;
 	}
 
 	// set methods
@@ -674,6 +688,20 @@ public:
 
 		delete[] ind;
 		delete[] val;
+	}
+
+	void write_labels(string outfile) {
+		ofstream fout (outfile);
+
+		if(fout.is_open()) {
+			for(auto label : _labels) {
+				fout << label << endl;
+			}			
+		}
+		else {
+			cout << "Error in GLPKConvexSeparation::write_labels : Couldn't open file " + outfile + " for writing" << endl;
+		}
+		fout.close();
 	}
 
 	void print_parameters() {

@@ -10,4 +10,5 @@ bin/*
 testing/bin/*
 testing/ref_data/*
 testing/constraints/*
+testing/test_data/*
 debug/*
