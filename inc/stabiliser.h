@@ -273,16 +273,67 @@ public:
 
 // --- graph states
 
+// read graph6 format and returns upper triangle of adjacency matrix in vectorised form
+// IMPORTANT: this implementation is quick and dirty and hence only works for graphs with less than 63 vertices (fine for me)
+binvec graph6_to_adj_mat(const string g6) {
+	// The input string g6 is assumed to hold a graph6 representation of the graph in ASCII-encoded form, i.e. it's a sequence of ASCII characters
 
-// reads the geng output of non-isomorphic graphs 
-// the data format is assumed to store the upper triangle of the adjacency matrices of the graphs as e.g.
-//    000
-//    00
-//    0
-// the matrices are proceded by some header line
-// 
-// The matrices are stored row-wise as a bitstring and returned as a vector<binvec_short>
-vector<binvec_short> read_graph_states(const string file, const unsigned n) {
+	// interprete g6 as integer
+	binvec x = 0;
+	unsigned n = (unsigned)g6.at(0)-63;
+	unsigned l = g6.size();
+	unsigned N = n*(n-1)/2;
+	unsigned i,j;
+
+	for(i=1; i<l; i++) {
+		x ^= ((binvec)g6.at(i)-63) << (6*(l-i-1));
+	}
+	x = get_bits(x, 0, N-1, 6*(l-1));
+
+	// the just created vector has column-wise ordering, convert it to row-wise ordering
+	binvec ret = 0;
+	for(unsigned k=0; k<N; k++) {
+		if(get_bit(x,k,N) == 1) {
+			j = get_ut_col2(k,n);
+			i = get_ut_row2(j,k,n);
+			ret = set_bit(ret, get_ut_index(i,j,n), N);
+		}
+	}
+
+	return ret;
+}
+
+unsigned get_order(const string g6) {
+	return (unsigned)g6.at(0)-63;
+}
+
+unsigned get_order_from_file(const string file) {
+	// open the file
+	fstream fin(file, ios::in);
+	string row;
+
+	if(fin.is_open()) {
+		fin >> row;
+	} 
+	else {
+		cout << "Couldn't open file " << file << endl;
+		return 1;
+	}
+	fin.close();
+
+	return get_order(row);
+}
+
+// reads the geng output of adjacency matrices for all non-isomorphic graphs of n vertices
+vector<binvec> read_graphs(const string file, const unsigned n) {
+	// the data format is assumed to store the upper triangle of the adjacency matrices of the graphs as e.g.
+	//    000
+	//    00
+	//    0
+	// the matrices are proceded by some header line
+	// 
+	// The matrices are stored row-wise as a bitstring and returned as a vector<binvec_short>
+
 	// open the file
 	fstream fin(file, ios::in);
 
@@ -291,7 +342,7 @@ vector<binvec_short> read_graph_states(const string file, const unsigned n) {
 	unsigned counter=0;
 	unsigned idx;
 
-	vector<binvec_short> ret;
+	vector<binvec> ret;
 
 	if(fin.is_open()) {
 		while(fin >> row) {
@@ -322,14 +373,13 @@ vector<binvec_short> read_graph_states(const string file, const unsigned n) {
 	return ret;
 }
 
-vector<binvec> generate_gs_Lagrangian(const binvec_short th, const unsigned n) {
-	// This generates the i-th symmetric nxn matrix and returns the representation of the corresponding graph state given in terms of a basis for the Lagrangian subspace
+vector<binvec> generate_gs_Lagrangian(const binvec &A, const unsigned n) {
+	// This returns the representation of a graph state given in terms of a basis for the Lagrangian subspace. The graph of the graph state is specified by the upper triangle of its adjacency matrix, given as a binary vector A in Z_2^{n(n-1)/2}.
 	// The basis vectors are given by the column vectors of the matrix
 	// 			(  A  )
 	// 		B = ( --- )			(in (z_1,...,z_n,x_1,...,x_n) coordinates)
 	//			(  I  )
-	// where A is a nxn symmetric matrix and I is the nxn identity matrix. Note that since we are working in product coordinates (z_1,x_1,z_2,x_2,...,z_n,x_n), the function will return a permuted version of these vectors.
-	// The i-th vector from Z_2^{n(n+1)/2} is simply given by the binary representation of i
+	// where A is the adjacency matrix, now interpreted as nxn symmetric matrix and I is the nxn identity matrix. Note that since we are working in product coordinates (z_1,x_1,z_2,x_2,...,z_n,x_n), the function will return a permuted version of these vectors.
 
 	// reserve memory
 	vector<binvec> B(n,0);
@@ -340,9 +390,9 @@ vector<binvec> generate_gs_Lagrangian(const binvec_short th, const unsigned n) {
 	unsigned i,j;
 
 	for(unsigned k=0; k<N; k++) {
-		if( get_bit(th, k, N) == 1) {
-			i = get_symmetric_row(k,n);
-			j = get_symmetric_col(i,k,n);
+		if( get_bit(A, k, N) == 1) {
+			i = get_ut_row(k,n);
+			j = get_ut_col(i,k,n);
 
 			B[j] = set_bit(B[j], i, 2*n);
 			B[i] = set_bit(B[i], j, 2*n);
@@ -363,7 +413,7 @@ vector<binvec> generate_gs_Lagrangian(const binvec_short th, const unsigned n) {
 
 // --- stabilisers 
 
-bool in_Lagrangian(const binvec x, const vector<binvec> &B, const unsigned n) {
+bool in_Lagrangian(const binvec &x, const vector<binvec> &B, const unsigned n) {
 	unsigned test = 0;
 	for(binvec v : B) {
 		test += symplectic_form(x,v,n);
@@ -485,68 +535,6 @@ vector<double> project_state(const vector<binvec> &B, const binvec_short s) {
 }
 
 
-vector<vector<double>> generate_projected_stabiliser_states_from_graphs(const string file, const unsigned n) {
-
-	// needed later
-	unsigned N = pow(2,n);
-	vector<vector<double>> states;
-	states.reserve(pow(3,n)); // estimated size
-	vector<double> tmp_state (n,0);
-	vector<binvec> B (n);
-	vector<binvec> SB (n);
-
-
-	// generate group generated by local hadmards
-	vector<vector<binvec>> H_group = { vector<binvec>({0b10,0b01}), vector<binvec>({0b01,0b10}) };
-
-	vector<vector<binvec>> LH_group (N);
-	vector<vector<binvec>> Slist (n);
-	for(binvec i=0; i<N; i++) {
-		for(unsigned j=0; j<n; j++) {
-			Slist.at(j) = H_group.at(get_bit(i, j, n));
-		}
-		LH_group.at(i) = direct_sum(Slist);
-	}
-
-	// graph state loop
-	vector<binvec_short> graphs = read_graph_states(file,n);
-
-	unsigned counter = 1;
-	unsigned graph_len = graphs.size();
-	cout << "  Compute projected stabiliser states for graph" << endl;;
-	for(auto th : graphs) {
-		cout << "\r    #" << counter << " / " << graph_len << flush;
-		B = generate_gs_Lagrangian(th,n);
-
-		// we have to take the local Hadamard orbit of that Lagrangian
-		for(auto S : LH_group) {
-			for(unsigned k=0; k<n; k++) {
-				SB.at(k) = matrix_vector_prod_mod2(S, B.at(k));
-			}
-
-			// generate stabiliser states for all possible sign choices and directly project them
-			// note that the state is only added if it not already exists in the set states.
-			for(binvec_short s=0; s<N; s++) {
-				tmp_state = project_state(SB, s);
-
-				// check if projected state tmp_state2 already exists
-				// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than tmp_state2
-				auto it = lower_bound(states.begin(), states.end(), tmp_state);
-				if(it == states.end() || tmp_state < *it) {
-					// the element is new
-					states.insert(it, tmp_state);
-				}
-				// note that procedures preserves the ordering ... 
-			}
-		}
-		++counter;
-	}
-
-	cout << endl;
-
-	return states;
-}
-
 struct proj_helper {
 	binvec_short a;
 	char fock_index;
@@ -556,7 +544,29 @@ struct proj_helper {
 	}
 };
 
-pair< vector<vector<int>>, vector<string> > generate_projected_stabiliser_states_from_graphs2(const string file, const unsigned n) {
+pair< vector<vector<int>>, vector<string> > generate_projected_stabiliser_states_from_graphs(const string file) {
+
+	
+	// open the file
+	fstream fin(file, ios::in);
+
+	vector<string> graphs;
+	string row;
+
+	if(fin.is_open()) {
+		while(fin >> row) {
+			graphs.push_back(row);
+		}
+	} 
+	else {
+		cout << "Couldn't open file " << file << endl;
+	}
+
+	fin.close();
+
+	// get number of qubits
+	unsigned n = get_order( graphs.at(0) );
+	unsigned graph_len = graphs.size();
 
 	// outer loop variables
 	unsigned N = pow(2,n);
@@ -591,16 +601,13 @@ pair< vector<vector<int>>, vector<string> > generate_projected_stabiliser_states
 	}
 
 	// graph state loop
-	vector<binvec_short> graphs = read_graph_states(file,n);
-
-	unsigned counter = 1;
 	int dist = 0;
-	unsigned graph_len = graphs.size();
+
 	cout << "  Compute projected stabiliser states for graph" << endl;
 
 	for(unsigned g=0; g<graph_len; g++) {
-		cout << "\r    #" << counter << " / " << graph_len << flush;
-		B = generate_gs_Lagrangian(graphs.at(g),n);
+		cout << "\r    #" << g << " / " << graph_len << flush;
+		B = generate_gs_Lagrangian( graph6_to_adj_mat( graphs.at(g) ),n);
 
 		// we have to take the local Hadamard orbit of that Lagrangian
 		for(binvec h=0; h<N; h++) {
@@ -661,18 +668,18 @@ pair< vector<vector<int>>, vector<string> > generate_projected_stabiliser_states
 					states.insert(it, pr_state);
 
 					// add a label
-					labels.insert(labels.begin()+dist, to_string(g)+" "+write_bits(h,n)+" "+write_bits(s,n));
+					labels.insert(labels.begin()+dist, graphs.at(g)+" "+write_bits(h,n)+" "+write_bits(s,n));
 				}
 				// note that procedures preserves the ordering in states ... 
 			}
 		}
-		++counter;
 	}
 
 	cout << endl;
 
 	return make_pair(states,labels);
 }
+
 
 vector<vector<int>> generate_projected_stabiliser_states_from_graph(const string file, const int gid, const unsigned n) {
 
@@ -706,7 +713,7 @@ vector<vector<int>> generate_projected_stabiliser_states_from_graph(const string
 	}
 
 	// graph state loop
-	vector<binvec_short> graphs = read_graph_states(file,n);
+	vector<binvec> graphs = read_graphs(file,n);
 
 	unsigned graph_len = graphs.size();
 	cout << "  Compute projected stabiliser states for maximally connected graph" << endl;
@@ -822,7 +829,7 @@ GLPKConvexSeparation generate_projected_stabiliser_states_from_graphs_conv(const
 	}
 
 	// graph state loop
-	vector<binvec_short> graphs = read_graph_states(file,n);
+	vector<binvec> graphs = read_graphs(file,n);
 
 	unsigned counter = 1;
 	unsigned graph_len = graphs.size();

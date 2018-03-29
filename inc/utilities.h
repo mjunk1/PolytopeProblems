@@ -54,22 +54,6 @@ vector<double> random_distribution(unsigned n) {
 
 
 // linear algebra
-// to be replaced with BLAS
-// vector<double> matrix_vector_prod(const vector<double> A, const vector<double> x) {
-// 	unsigned N = x.size(); // N = 4^n
-// 	unsigned M = A.size()/N;
-// 	vector<double> y(M,0);
-
-// 	// transform
-// 	for(unsigned i=0; i<M; i++) {
-// 		for(unsigned j=0; j<N; j++) {
-// 			y.at(i) += A.at(N*i+j)*x.at(j);
-// 		}
-// 	}
-
-// 	return y;
-// }
-
 
 // careful! This function applies the transposed matrix A^T to x ...
 // in my case, this is convenient since ColMajor layout is faster
@@ -181,26 +165,35 @@ unsigned get_linear_index(const unsigned arr_dim, const unsigned arr_range, cons
 }
 
 
-// indexing for symmetric matrices
-// only the lower triangular part is stored
-unsigned get_symmetric_index(const unsigned i, const unsigned j) {
-	if(i >= j) {
-		return (j + i*(i+1)/2);
-	}
-	else {
-		return (i + j*(j+1)/2);
-	}
+// indexing for symmetric matrices, upper triangle storage
+inline unsigned get_ut_index(const unsigned i, const unsigned j, const unsigned n) {
+	return ( (n*(n-1)/2) - (n-i)*((n-i)-1)/2 + j - i - 1 );
 }
 
-inline unsigned get_symmetric_row(const unsigned k, const unsigned n) {
+inline unsigned get_ut_row(const unsigned k, const unsigned n) {
 	return n - 2 - floor(sqrt(-8*k + 4*n*(n-1)-7)/2.0 - 0.5);
 }
 
-inline unsigned get_symmetric_col(const unsigned i, const unsigned k, const unsigned n) {
+inline unsigned get_ut_col(const unsigned i, const unsigned k, const unsigned n) {
 	return k + i + 1 - n*(n-1)/2 + (n-i)*((n-i)-1)/2;
 }
 
+inline unsigned get_ut_index2(const unsigned i, const unsigned j, const unsigned n) {
+	return ( i + j*(j-1)/2 );
+}
 
+unsigned get_ut_col2(const unsigned k, const unsigned n) {
+	// return floor( 0.5 + 0.5*sqrt(8*k+1) );
+	for(unsigned j=1; j<n; j++) {
+		if(k >= j*(j-1)/2 && k < j*(j+1)/2) {
+			return j;
+		}
+	}
+}
+
+inline unsigned get_ut_row2(const unsigned j, const unsigned k, const unsigned n) {
+	return (k - j*(j-1)/2);
+}
 
 // ----- bit manipulation
 

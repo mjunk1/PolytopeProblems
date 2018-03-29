@@ -27,7 +27,6 @@ int main(int argc, char** argv) {
 // ----- parse comand-line parameters
 // ----------------------------------
 
-unsigned n;
 string outfile,infile;
 bool elim,verbose;
 
@@ -36,9 +35,6 @@ try {
 	TCLAP::CmdLine cmd("Program for generating the vertices of the projected Clifford polytope", ' ', "0.1");
 
 	// arguments
-	TCLAP::ValueArg<unsigned> nqubits_arg ("q","qubits", "Number of qubits", true, 0, "Positive integer");
-	cmd.add(nqubits_arg);
-
 	TCLAP::ValueArg<string> input_arg ("f", "file", "Input file name that contains the adjacency matrices for the non-isomorphic graphs with q vertices", true, "in.dat", "string");
 	cmd.add(input_arg);
 
@@ -54,7 +50,6 @@ try {
 
 	cmd.parse(argc, argv);
 
-	n = nqubits_arg.getValue();
 	outfile = output_arg.getValue();
 	infile = input_arg.getValue();
 	elim = elim_arg.getValue();
@@ -69,15 +64,17 @@ try {
 // ------ start generation
 // ----------------------------------
 
-cout << "------------------------------------------------------------" << endl;
+unsigned n = get_order_from_file(infile);
+
+cout << "-------------------------------------------------------------" << endl;
 cout << "Generate projected stabiliser states from graphs for n = " << n << endl;
-cout << "------------------------------------------------------------" << endl;
+cout << "-------------------------------------------------------------" << endl;
 
 // timing
 auto t1 = chrono::high_resolution_clock::now();
 
 // vector<vector<double>> pr_states = generate_projected_stabiliser_states_from_graphs(infile, n);
-pair< vector<vector<int>>, vector<string> > pr_states = generate_projected_stabiliser_states_from_graphs2(infile, n);
+pair< vector<vector<int>>, vector<string> > pr_states = generate_projected_stabiliser_states_from_graphs(infile);
 
 auto t2 = chrono::high_resolution_clock::now();	
 
