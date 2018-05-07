@@ -178,6 +178,7 @@ inline unsigned get_ut_col(const unsigned i, const unsigned k, const unsigned n)
 	return k + i + 1 - n*(n-1)/2 + (n-i)*((n-i)-1)/2;
 }
 
+// this is for column-wise storage
 inline unsigned get_ut_index2(const unsigned i, const unsigned j, const unsigned n) {
 	return ( i + j*(j-1)/2 );
 }
@@ -206,9 +207,14 @@ unsigned parity(unsigned i) {
 }
 
 
-// get j-th bit of b, counted from the end of the bitstring
+// get j-th bit of b, counted from the end of the bitstring, i.e. from the left
 inline unsigned get_bit(unsigned b, unsigned j, unsigned n) {
 	return ((b >> ((n)-(j)-1U)) & 1U);
+}
+
+// get j-th bit of b, counted from the from the right
+inline unsigned get_bit2(unsigned b, unsigned j) {
+	return ((b >> j) & 1U);
 }
 
 inline unsigned get_bits(unsigned b, unsigned j, unsigned k, unsigned n) {

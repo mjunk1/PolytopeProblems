@@ -74,7 +74,7 @@ cout << "-------------------------------------------------------------" << endl;
 auto t1 = chrono::high_resolution_clock::now();
 
 // vector<vector<double>> pr_states = pr_stabiliser_from_graphs(infile, n);
-pair< vector<vector<int>>, vector<string> > pr_states = pr_stabiliser_from_graphs2(infile);
+pair< vector<vector<int>>, vector<string> > pr_states = pr_stabiliser_from_graphs3(infile);
 
 auto t2 = chrono::high_resolution_clock::now();	
 
