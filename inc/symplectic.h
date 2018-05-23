@@ -70,7 +70,7 @@ int phi(const binvec a, const binvec b, const unsigned n) {
 	return ( 2*eta(a,b,n) + eta(a^b,a^b,n) - eta(a,a,n) - eta(b,b,n) );
 }
 
-int phi(const vector<binvec> a, const unsigned n) {
+int phi(const vector<binvec> &a, const unsigned n) {
 	// Compute the phase that is appearing in the product of many Weyl operators
 	//		W(a_1)W(a_2)...W(a_m) = i^{\phi(a_1,...,a_m)}W(a_1+...+a_m)
 	// This phase is given by
@@ -126,7 +126,7 @@ binvec matrix_vector_prod_mod2(const binvec *A, const binvec x, const unsigned N
 	return b;	
 }
 
-binvec matrix_vector_prod_mod2(const vector<binvec> A, const binvec x) {
+binvec matrix_vector_prod_mod2(const vector<binvec> &A, const binvec x) {
 	binvec b = 0;
 
 	/* This performs the formula:
@@ -143,7 +143,7 @@ binvec matrix_vector_prod_mod2(const vector<binvec> A, const binvec x) {
 	return b;	
 }
 
-vector<binvec> direct_sum(const vector<binvec> A1, const vector<binvec> A2) {
+vector<binvec> direct_sum(const vector<binvec> &A1, const vector<binvec> &A2) {
 	// Returns the direct sum A1 + A2 of the square matrices A1 and A2
 
 	unsigned n1 = A1.size();
@@ -162,13 +162,59 @@ vector<binvec> direct_sum(const vector<binvec> A1, const vector<binvec> A2) {
 	return R;
 
 }
-vector<binvec> direct_sum(const vector<vector<binvec>> Alist) {
+vector<binvec> direct_sum(const vector<vector<binvec>> &Alist) {
 	vector<binvec> temp = Alist.at(0);
 	for(unsigned i=1; i<Alist.size(); i++) {
 		temp = direct_sum(temp, Alist.at(i));
 	}
 
 	return temp;
+}
+
+vector<binvec> ut_to_dense_matrix(const binvec A, unsigned n) {
+	vector<binvec> R (n,0);
+	unsigned N = n*(n-1)/2;
+	unsigned i,j;
+
+	for(unsigned k=0; k<N; k++) {
+		if(get_bit(A,k,N) == 1) {
+			i = get_ut_row(k,n);
+			j = get_ut_col(i,k,n);
+			R.at(i) = set_bit(R.at(i), j, n);
+			R.at(j) = set_bit(R.at(j), i, n);
+		}
+	}
+
+	return R;
+}
+
+binvec dense_to_ut_matrix(vector<binvec> &A) {
+	unsigned n = A.size();
+	unsigned N = n*(n-1)/2;
+	binvec R = 0;
+	unsigned i,j;
+	
+	for(unsigned k=0; k<N; k++) {	
+		i = get_ut_row(k,n);
+		j = get_ut_col(i,k,n);
+		if(get_bit(A.at(i),j,n) == 1) {
+			R = set_bit(R, k, N);
+		}
+	}	
+
+	return R;
+}
+
+// direct sum of two upper triangle matrices
+binvec direct_sum_ut(const binvec A1, const unsigned n1, const binvec A2, const unsigned n2) {
+	// Returns the direct sum A1 + A2 of the upper triangle matrices A1 and A2
+
+	// construct dense matrices
+	vector<binvec> a1 = ut_to_dense_matrix(A1, n1);
+	vector<binvec> a2 = ut_to_dense_matrix(A2, n2);
+	vector<binvec> sum = direct_sum(a1, a2);
+
+	return dense_to_ut_matrix(sum);
 }
 
 void symplectic_transform(double *pin, double *pout, const binvec *S, const unsigned n) {
@@ -241,7 +287,7 @@ int phase_function(const binvec a, const binvec *S, const unsigned n) {
 
 }
 
-int phase_function(const binvec a, const vector<binvec> S) {
+int phase_function(const binvec a, const vector<binvec> &S) {
 	// represents the phase function g of the trivial Clifford representative C with [C]=S in Sp(2n) = C(n)/P(n). It describes the action of C as follows:
 	//		C W_a C^\dagger = (-1)^{g(a)} W_{Sa} 
 
@@ -452,7 +498,7 @@ vector<binvec> generate_symplectic_matrix(const binvec i, const unsigned n) {
 	return g;
 }
 
-vector<int> projected_liouville_matrix(const vector<binvec> S, const binvec a=0) {
+vector<int> projected_liouville_matrix(const vector<binvec> &S, const binvec a=0) {
 	// Computes the Liouville matrix of the "canonical" Clifford representative corresponding to the symplectic matrix S, i.e. the one that acts on Z/X Paulis as
 	//		C:  W(e_j) ---> +W(Se_j)
 	// Its action on an arbitrary Pauli operator W(b) is
@@ -497,7 +543,7 @@ vector<int> projected_liouville_matrix(const vector<binvec> S, const binvec a=0)
 }
 
 
-vector<int> liouville_matrix(const vector<binvec> S, const binvec c=0) {
+vector<int> liouville_matrix(const vector<binvec> &S, const binvec c=0) {
 	// Computes the Liouville matrix of the "trivial" Clifford representative corresponding to the symplectic matrix S, i.e. the one that acts Z/X Paulis as
 	//		C:  W(e_j) ---> +W(Se_j)
 	// Its action on an arbitrary Pauli operator W(b) is

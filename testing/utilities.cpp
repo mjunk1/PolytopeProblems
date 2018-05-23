@@ -44,30 +44,44 @@ int main(int argc, char** argv) {
 	// }
 
 
+	// cout << "=================================================" << endl;
+	// cout << "===   Start testing of index sets" << endl;
+	// cout << "=================================================" << endl;
+
+	// random_device rd; 
+	// mt19937 gen(rd()); 
+	// uniform_int_distribution<> dist (5, 15);
+
+	// unsigned n = dist(gen);
+
+	// cout << "Testing all index sets for n = " << n << " qubits for correctness ..." << endl;
+
+	// for(unsigned k=0; k<=n; k++) {
+	// 	for(unsigned kk=0; kk<=k; kk++) {
+	// 		vector<unsigned> iset = index_set2(kk,k,n);
+	// 		for(auto set : iset) {
+	// 			vector<unsigned> weights = count_weights(set,n);
+	// 			if(weights.at(1)+weights.at(3) != k || weights.at(3) != kk) {
+	// 				cout << "Something went wrong with the following index set entry with (kk,k,n)=(" << kk << "," << k << "," << n << endl;
+	// 				cout << write_bits(set,2*n) << endl;
+	// 				break;
+	// 			}
+	// 		}
+	// 	}
+	// }
+
 	cout << "=================================================" << endl;
-	cout << "===   Start testing of index sets" << endl;
+	cout << "===   Start testing of partitions" << endl;
 	cout << "=================================================" << endl;
 
-	random_device rd; 
-	mt19937 gen(rd()); 
-	uniform_int_distribution<> dist (5, 15);
+	N = 8;
+	cout << "All partitions for n = " << N << endl;
 
-	unsigned n = dist(gen);
-
-	cout << "Testing all index sets for n = " << n << " qubits for correctness ..." << endl;
-
-	for(unsigned k=0; k<=n; k++) {
-		for(unsigned kk=0; kk<=k; kk++) {
-			vector<unsigned> iset = index_set2(kk,k,n);
-			for(auto set : iset) {
-				vector<unsigned> weights = count_weights(set,n);
-				if(weights.at(1)+weights.at(3) != k || weights.at(3) != kk) {
-					cout << "Something went wrong with the following index set entry with (kk,k,n)=(" << kk << "," << k << "," << n << endl;
-					cout << write_bits(set,2*n) << endl;
-					break;
-				}
-			}
+	vector<vector<unsigned>> parts = get_partitions(N);
+	for(auto p : parts) {
+		for(auto i : p) {
+			cout << i << " ";
 		}
+		cout << endl;
 	}
-
 }

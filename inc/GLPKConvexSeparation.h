@@ -8,7 +8,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <algorithm>
-#include <eigen3/Eigen/Sparse>
+// #include <eigen3/Eigen/Sparse>
 
 #ifndef UTILITIES_H
 #include "utilities.h"
@@ -27,7 +27,7 @@
 #endif
 
 using namespace std;
-using namespace Eigen;
+// using namespace Eigen;
 
 
 
@@ -126,7 +126,6 @@ protected:
 		glp_set_mat_col(_lp, _dim+1, nvertices+1, ind.data(), c.data());
 
 
-
 		// ----- additional preparation
 
 		// preparing coordinates of the point to check
@@ -137,6 +136,9 @@ protected:
 		_ind.resize(_dim+2);
 		for(int i=0; i<=_dim+1; i++)
 			_ind.at(i) = i;
+
+		// set some empty labels
+		_labels.assign(nvertices, "");
 	}
 
 public:
@@ -206,15 +208,114 @@ public:
 
 	}
 
-	GLPKConvexSeparation(SparseMatrix<double,RowMajor>& vertex_matrix) {
+	GLPKConvexSeparation(vector<vector<int>> cmatrix) {
 		// reading vertex coordinates and parameters
-		if(read_vertex_matrix(vertex_matrix) != 0) {
+		if(read_vertex_matrix(cmatrix) != 0) {
 			exit (EXIT_FAILURE);
 		}
 
 		// setting parameter struct to default values
 		glp_init_smcp(&_parm);
 
+	}
+
+	// GLPKConvexSeparation(SparseMatrix<double,RowMajor>& vertex_matrix) {
+	// 	// reading vertex coordinates and parameters
+	// 	if(read_vertex_matrix(vertex_matrix) != 0) {
+	// 		exit (EXIT_FAILURE);
+	// 	}
+
+	// 	// setting parameter struct to default values
+	// 	glp_init_smcp(&_parm);
+
+	// }
+
+	// Copy constructor
+	GLPKConvexSeparation(const GLPKConvexSeparation& other) :
+		_dim(other._dim),
+		_y(other._y),
+		_parm(other._parm),
+		_glp_ret(other._glp_ret),
+		_ind(other._ind),
+		_method(other._method),
+		_lbnd(other._lbnd),
+		_ubnd(other._ubnd),
+		_max_iter(other._max_iter),
+		_precision(other._precision),
+		_labels(other._labels),
+		_verbose(other._verbose) 
+		{
+			// copy GLPK object
+			glp_copy_prob(_lp, other._lp, GLP_ON);
+	} 
+
+	// Copy assignment via copy-and-swap
+	GLPKConvexSeparation& operator=(GLPKConvexSeparation rhs) {
+		swap(_dim, rhs._dim);
+		swap(_y, rhs._y);
+		swap(_parm, rhs._parm);
+		swap(_glp_ret, rhs._glp_ret);
+		swap(_ind, rhs._ind);
+		swap(_method, rhs._method);
+		swap(_lbnd, rhs._lbnd);
+		swap(_ubnd, rhs._ubnd);
+		swap(_max_iter, rhs._max_iter);
+		swap(_precision, rhs._precision);
+		swap(_labels, rhs._labels);
+		swap(_verbose, rhs._verbose);
+		swap(_lp, rhs._lp);
+
+		return *this;
+	}
+
+	// Move constructor
+	GLPKConvexSeparation(GLPKConvexSeparation&& other) :
+		_dim(other._dim),
+		_y(other._y),
+		_parm(other._parm),
+		_glp_ret(other._glp_ret),
+		_ind(other._ind),
+		_method(other._method),
+		_lbnd(other._lbnd),
+		_ubnd(other._ubnd),
+		_max_iter(other._max_iter),
+		_precision(other._precision),
+		_labels(other._labels),
+		_verbose(other._verbose),
+		_lp(other._lp)
+		{
+			// leave other object in a good state
+			other._lp = nullptr;
+	} 
+
+	// Move assignment
+	GLPKConvexSeparation& operator=(GLPKConvexSeparation&& rhs) {
+		if(&rhs == this) {
+			return *this;
+		}
+
+		// copy members
+		_dim = rhs._dim;
+		_y = rhs._y;
+		_parm = rhs._parm;
+		_glp_ret = rhs._glp_ret;
+		_ind = rhs._ind;
+		_method = rhs._method;
+		_lbnd = rhs._lbnd;
+		_ubnd = rhs._ubnd;
+		_max_iter = rhs._max_iter;
+		_precision = rhs._precision;
+		_labels = rhs._labels;
+		_verbose = rhs._verbose;
+
+		// delete data that is held
+		glp_delete_prob(_lp);
+
+		// steal rhs data
+		_lp = rhs._lp;
+		rhs._lp = nullptr;
+
+		return *this;
 	}
 
 	// Destructor
@@ -229,11 +330,17 @@ public:
 		return 0;
 	}
 
-	int read_vertex_matrix(SparseMatrix<double,RowMajor>& vertex_matrix) {
-		GLPKFormat data = to_GLPK_format(vertex_matrix);
+	int read_vertex_matrix(vector<vector<int>> cmatrix) {
+		GLPKFormat data = to_GLPK_format(cmatrix);
 		update_problem(data);
 		return 0;
 	}
+
+	// int read_vertex_matrix(SparseMatrix<double,RowMajor>& vertex_matrix) {
+	// 	GLPKFormat data = to_GLPK_format(vertex_matrix);
+	// 	update_problem(data);
+	// 	return 0;
+	// }
 
 
 	// operations
@@ -561,6 +668,27 @@ public:
 		return v;
 	}
 
+	vector<int> iget_vertex(unsigned i) {
+		// returns a dense vector containing the coordinates of the i-th vertex
+		assert(i < get_nvertices());
+
+		vector<int> v (_dim, 0.);
+
+		int *ind = new int[_dim+2];
+		double *val = new double[_dim+2];
+		int len = glp_get_mat_row(_lp, i+2, ind, val);
+
+		for(unsigned j=1; j<=len; j++){
+			if(ind[j] <= _dim)
+				v.at(ind[j]-1) = (int)val[j];
+		}
+
+		delete[] ind;
+		delete[] val;
+
+		return v;
+	}
+
 	int get_status() {
 		if(_method == "simplex")
 			return glp_get_status(_lp);
@@ -582,6 +710,24 @@ public:
 
 	vector<string> get_labels() {
 		return _labels;
+	}
+
+	pair< vector<vector<double>>, vector<string> > get_vertices() {
+		vector<vector<double>> ret (get_nvertices(), vector<double>(_dim));
+		for(unsigned i=0; i<ret.size(); i++) {
+			ret.at(i) = get_vertex(i);
+		}
+
+		return make_pair(ret,_labels);
+	}
+
+	pair< vector<vector<int>>, vector<string> > iget_vertices() {
+		vector<vector<int>> ret (get_nvertices(), vector<int>(_dim));
+		for(unsigned i=0; i<ret.size(); i++) {
+			ret.at(i) = iget_vertex(i);
+		}
+
+		return make_pair(ret,_labels);
 	}
 
 	// set methods

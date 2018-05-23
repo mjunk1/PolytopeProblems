@@ -18,23 +18,18 @@ using namespace std;
 
 int main(int argc, char** argv) {
 
-unsigned n;
 string infile;
 
 try {
 
-	TCLAP::CmdLine cmd("Program for generating the vertices of the projected Clifford polytope", ' ', "0.1");
+	TCLAP::CmdLine cmd("Test blabla", ' ', "0.1");
 
 	// arguments
-	TCLAP::ValueArg<unsigned> nqubits_arg ("q","qubits", "Number of qubits", true, 0, "Positive integer");
-	cmd.add(nqubits_arg);
-
 	TCLAP::ValueArg<string> input_arg ("f", "file", "Input file name that contains the adjacency matrices for the non-isomorphic graphs with q vertices", true, "in.dat", "string");
 	cmd.add(input_arg);
 
 	cmd.parse(argc, argv);
 
-	n = nqubits_arg.getValue();
 	infile = input_arg.getValue();
 
 } catch (TCLAP::ArgException &e) { 
@@ -46,9 +41,40 @@ cout << "Test graph stuff" << endl;
 cout << "-----------------" << endl;
 
 
-vector<unsigned> graphs = read_graph_states(infile,n);
+// open the file
+fstream fin(infile, ios::in);
 
-cout << "Read " << graphs.size() << " graphs !" << endl;
+vector<string> graphs;
+string row;
+
+if(fin.is_open()) {
+	while(fin >> row) {
+		graphs.push_back(row);
+	}
+} 
+else {
+	cout << "Couldn't open file " << infile << endl;
+}
+fin.close();
+
+cout << "Read " << graphs.size() << " graphs." << endl;
+
+// convert graph6 to adjacency matrices and back
+vector<binvec> adj_mat;
+unsigned n = get_order(graphs.at(0));
+for(auto g : graphs) {
+	adj_mat.push_back( graph6_to_adj_mat(g) );
+}
+
+// print
+cout << "Check if conversion works ... " << endl;
+for(unsigned k=0; k<adj_mat.size(); k++) {
+	if(adj_mat_to_graph6(adj_mat.at(k), n) != graphs.at(k)) {
+		cout << "Fail at graph #" << k << endl;
+	}
+}
+cout << "Done" << endl;
+
 
 
 }

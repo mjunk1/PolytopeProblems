@@ -52,6 +52,32 @@ vector<double> random_distribution(unsigned n) {
 	return p;
 }
 
+// get all descending partitions of a positive number n, i.e. a list { (n), (n-1,1), ... } of a list of positive integers l_i such that 
+// n = l_1 + ... + l_m (m=1,...,n), and
+// n >= l_1 >= l_2 >= ... >= l_m >= 1
+// The first element is n itself.
+vector<vector<unsigned>> get_partitions(unsigned n) {
+	if( n == 1 ) {
+		// return the list { (1) }
+		return vector<vector<unsigned>> (1, vector<unsigned>(1,1) );
+	}
+
+	vector<vector<unsigned>> ret = { vector<unsigned>(1,n) };
+	vector<vector<unsigned>> ret2;
+	
+	for(unsigned k=1; k<n; k++) {
+		ret2 = get_partitions(k);
+		for(auto p : ret2) {
+			if(p.at(0) <= n-k) {
+				p.insert(p.begin(), n-k);
+				ret.push_back(p);
+			}
+		}
+	}
+
+	return ret;
+}
+
 
 // linear algebra
 
@@ -196,6 +222,10 @@ inline unsigned get_ut_row2(const unsigned j, const unsigned k, const unsigned n
 	return (k - j*(j-1)/2);
 }
 
+// conversion of upper-triangle storage to dense storage for symmetric matrices
+
+
+
 // ----- bit manipulation
 
 unsigned popcount(unsigned i) {
@@ -234,6 +264,19 @@ string write_bits(unsigned b, unsigned n) {
 
 	for(unsigned j=0; j<n; j++) {
 		str += to_string(get_bit(b,j,n)); 
+	}
+
+	return str;
+}
+
+string write_trits(unsigned t, unsigned n) {
+	string str;
+
+	vector<unsigned> trits(n,0);
+	get_multi_index(n, 3, t, trits);
+
+	for(unsigned j=0; j<n; j++) {
+		str += to_string( trits.at(j) ); 
 	}
 
 	return str;
