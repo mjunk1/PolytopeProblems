@@ -9,6 +9,7 @@
 #include <cassert>
 #include <algorithm>
 #include <set>
+#include <cstdint>
 
 #ifndef UTILITIES_H
 #include "utilities.h"
@@ -24,22 +25,86 @@ using namespace std;
 // 		(1,0,0,1) \in Z_2^4 ----> 1001 = 9
 // We use the coordinate convention (z_1,x_1,z_2,x_2,...,z_n,x_n) in phase space such that Z_2^{2n} decomposes into a direct sum of 1-qubit phase spaces.
 // Matrices are represented as a vector of unsigned integers, where every entry of this vector corresponds to a row of the matrix.
-//
-//
-// Important note:
-// ---------------
-// Right now we use the datatype unsigned. Its size is 16 bit, meaning that in can at most represent a binary vector of length 2*8. Hence, this code is limited right now to at most 8 qubits! 
-// In one of the next versions, we define a custom datatype which can be set as needed, e.g. to unsigned long
-//
 
 
 // ---- typedefs
 
 // type that is used to represent binary vectors in phase space
-// note that for n qubits, the binary vector corresponds to a sequence of 2n bits, so we use by default unsigned long which can represent 32 bits, so works definitely for up to n=16
-typedef unsigned long binvec;
-typedef unsigned binvec_short;
+// note that for n qubits, the binary vector corresponds to a sequence of 2n bits, so we use by default uint64_t which can represent 64 bits, so works definitely for up to n=32
+typedef uint64_t binvec;
 
+
+// ----- bit manipulation for operating on binary vectors
+
+unsigned popcount(unsigned i) {
+	return __builtin_popcount(i);
+}
+
+unsigned parity(unsigned i) {
+	return __builtin_parity(i);
+}
+
+
+// get j-th bit of b, counted from the end of the bitstring, i.e. from the left
+inline binvec get_bit(binvec b, unsigned j, unsigned n) {
+	return ((b >> ((n)-(j)-1U)) & 1U);
+}
+
+// get j-th bit of b, counted from the from the right
+inline binvec get_bit2(binvec b, unsigned j) {
+	return ((b >> j) & 1U);
+}
+
+inline binvec get_bits(binvec b, unsigned j, unsigned k, unsigned n) {
+	return ((b >> (n-k-1U)) & ((1U << (k-j+1U))-1));
+}
+
+
+inline binvec set_bit(binvec b, unsigned j, unsigned n) {
+	return (b | (1 << (n-j-1U)));
+}
+
+inline binvec reset_bit(binvec b, unsigned j, unsigned n) {
+	return (b & (~(1 << (n-j-1U))));
+}
+
+string write_bits(binvec b, unsigned n) {
+	string str;
+
+	for(unsigned j=0; j<n; j++) {
+		str += to_string(get_bit(b,j,n)); 
+	}
+
+	return str;
+}
+
+string write_trits(binvec t, unsigned n) {
+	string str;
+
+	vector<unsigned> trits(n,0);
+	get_multi_index(n, 3, t, trits);
+
+	for(unsigned j=0; j<n; j++) {
+		str += to_string( trits.at(j) ); 
+	}
+
+	return str;
+}
+
+binvec invert_bits(const binvec b, const unsigned n) {
+	// Returns a copy of b with inverted ordering of bits, e.g.
+	// 		0010110 ---> 0110100
+	// Note that this function "sees" only the first n bits, all the other bits are set to zero. I.e. calling the function for b = 0010110 with n = 6 will instead give
+	// 		0010110 ---> 0011010
+
+	unsigned r = 0;
+	for(unsigned i=0; i<n; i++) {
+		if(get_bit(b,i,n) == 1) {
+			r |= 1<<i;
+		}
+	}
+	return r;
+}
 
 // ---- For working on finite fields
 
@@ -247,7 +312,7 @@ binvec zx_to_product_coordinates(const binvec x, const unsigned n) {
 // counts weights of the Pauli operator that corresponds to the phase space point a
 // note that the order is 1,X,Z,Y
 vector<unsigned> count_weights(const binvec a, const unsigned n) {
-	unsigned ai;
+	binvec ai;
 	vector<unsigned> weights(4,0);
 	for(unsigned i=0; i<n; i++) {
 		ai = get_bits(a, 2*i, 2*i+1, 2*n);
@@ -255,6 +320,7 @@ vector<unsigned> count_weights(const binvec a, const unsigned n) {
 	}
 	return weights;
 }
+
 
 // ---- Symplectic group generation
 
@@ -488,7 +554,7 @@ vector<binvec> generate_symplectic_matrix(const binvec i, const unsigned n) {
 	}
 
 	// finally, apply the transvections to each row in g
-	for(binvec_short j=0; j<nn; j++) {
+	for(binvec j=0; j<nn; j++) {
 		g[j] = transvection(T.at(1),g[j],n);
 		g[j] = transvection(T.at(0),g[j],n);
 		g[j] = transvection(h0,g[j],n);

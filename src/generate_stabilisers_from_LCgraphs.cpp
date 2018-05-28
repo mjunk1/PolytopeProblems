@@ -28,24 +28,33 @@ int main(int argc, char** argv) {
 // ----------------------------------
 
 string outfile,infile;
-bool elim,verbose;
+bool elim,verbose,con,dis,save_proj;
 
 try {
 
-	TCLAP::CmdLine cmd("Program for generating the vertices of the projected Clifford polytope", ' ', "0.1");
+	TCLAP::CmdLine cmd("Program for generating the vertices of the projected stabiliser polytope", ' ', "0.1");
 
 	// arguments
-	TCLAP::ValueArg<string> input_arg ("f", "file", "Input file name that contains the adjacency matrices for the non-isomorphic non-LC-equivalent graphs with q vertices in graph6 format", true, "in.dat", "string");
+	TCLAP::ValueArg<string> input_arg ("f", "file", "Input file name that contains the adjacency matrices for the non-isomorphic non-LC-equivalent graphs with n vertices in graph6 format", true, "in.dat", "string");
 	cmd.add(input_arg);
 
 	TCLAP::ValueArg<string> output_arg ("o", "outfile", "Output file name that will be used for writing the reduced constraint matrix", true, "out", "string");
 	cmd.add(output_arg);
 
-	TCLAP::SwitchArg elim_arg ("e", "eliminate", "Flag which determines wether to eliminate redundant points from the set, i.e. those points which are convex combinations of the others.", false);
+	TCLAP::SwitchArg elim_arg ("e", "eliminate", "Flag which disables eliminattion of redundant points from the set, i.e. those points which are convex combinations of the others.", true);
 	cmd.add(elim_arg);
 
 	TCLAP::SwitchArg verb_arg ("v", "verbose", "Does what it promises.", false);
 	cmd.add(verb_arg);
+
+	TCLAP::SwitchArg con_arg ("c", "connected", "Flag which disables the generation of connected states. If the flag is set, the program will check for the existence of a file containing these states and read them if is found.", true);
+	cmd.add(con_arg);
+
+	TCLAP::SwitchArg dis_arg ("d", "disconnected", "Flag which disables the generation of disconnected, i.e. product, states. If the flag is set, the program will check for the existence of a file containing these states and read them if is found.", true);
+	cmd.add(dis_arg);
+
+	TCLAP::SwitchArg proj_arg ("p", "save_projections", "Save all projections of stabiliser orbits to hard drive (only those from connected graphs).", false);
+	cmd.add(proj_arg);
 
 
 	cmd.parse(argc, argv);
@@ -54,6 +63,10 @@ try {
 	infile = input_arg.getValue();
 	elim = elim_arg.getValue();
 	verbose = verb_arg.getValue();
+	con = con_arg.getValue();
+	dis = dis_arg.getValue();
+	save_proj = proj_arg.getValue();
+
 
 } catch (TCLAP::ArgException &e) { 
 	cerr << "Error: " << e.error() << " for arg " << e.argId() << endl; 
@@ -66,61 +79,104 @@ try {
 
 unsigned n = get_order_from_file(infile);
 
+// these will hold connected and product states
+vector<vector<int>> con_states;
+vector<vector<int>> prod_states;
+vector<string> con_labels;
+vector<string> prod_labels;
+bool read_con = false;
+bool read_prod = false;
+
 cout << "----------------------------------------------------------------------" << endl;
 cout << "Generate projected stabiliser states from LC-orbits of graphs for n = " << n << endl;
 cout << "----------------------------------------------------------------------" << endl;
 
-
-// ---- generate orbits of connected graphs
-
-cout << endl;
-cout << "# Generate orbits of connected graphs" << endl;
-cout << "# -----------------------------------" << endl;
-cout << endl;
-
 // timing
 auto t1 = chrono::high_resolution_clock::now();
 
-auto pr_con = pr_stabiliser_from_LCgraphs2(infile);
+// ---- generate orbits of connected graphs
+// ----------------------------------------
 
-// timing
-auto t2 = chrono::high_resolution_clock::now();
-chrono::duration<double, milli> fp_ms = t2 - t1;
-
-cout << "   Found " << pr_con.first.size() << " images of connected graphs." << endl;
-cout << "   Generation took " <<  fp_ms.count() << " ms." << endl;
-
-
-// ---- elimination of non-extremal connected states
-
-if(elim == true) {
-
+if(con == true) {
 	cout << endl;
-	cout << "# Eliminate redundant points from the connected set" << endl;
-	cout << "# -------------------------------------------------" << endl;
+	cout << "# Generate orbits of connected graphs" << endl;
+	cout << "# -----------------------------------" << endl;
 	cout << endl;
 
-	GLPKConvexSeparation lp (pr_con.first);
-	if(verbose == false) {
-		lp.set_verbosity(1);
+	if(pr_stabiliser_from_LCgraphs(infile, con_states, con_labels) != 0) {
+		cout << "Couldn't read input file " << infile << endl;
+		cout << "Will now hold." << endl;
+		return 1;
 	}
-	lp.set_labels(pr_con.second);
-	int ret_status;
 
-	lp.print_parameters();
-	unsigned nvertices = lp.get_nvertices();
-	lp.delete_redundant_points();
-	cout << "   Deleted " << nvertices - lp.get_nvertices() << " points." << endl;
-	lp.print_parameters();
+	// timing
+	auto t2 = chrono::high_resolution_clock::now();
+	chrono::duration<double, milli> fp_ms = t2 - t1;
 
-	pr_con = lp.iget_vertices();
+	cout << "   Found " << con_states.size() << " images of connected graphs." << endl;
+	cout << "   Generation took " <<  fp_ms.count() << " ms." << endl;
+
+	// ---- save orbits
+	if(save_proj == true) {
+		write_states(con_states, outfile+to_string(n)+"_con_orbits.mat");
+		write_labels(con_labels, outfile+to_string(n)+"_con_orbits.lab");
+	}
+
+	// ---- elimination of non-extremal connected states
+
+	if(elim == true) {
+
+		cout << endl;
+		cout << "# Eliminate redundant points from the connected set" << endl;
+		cout << "# -------------------------------------------------" << endl;
+		cout << endl;
+
+		GLPKConvexSeparation lp (con_states);
+		if(verbose == false) {
+			lp.set_verbosity(1);
+		}
+		lp.set_labels(con_labels);
+		int ret_status;
+
+		lp.print_parameters();
+		unsigned nvertices = lp.get_nvertices();
+		lp.delete_redundant_points();
+		cout << "   Deleted " << nvertices - lp.get_nvertices() << " points." << endl;
+		lp.print_parameters();
+
+		con_states = lp.iget_vertices();
+		con_labels = lp.get_labels();
+
+	}
+
+	// write connected states
+	write_states(con_states, outfile+to_string(n)+"_con.mat");
+	write_labels(con_labels, outfile+to_string(n)+"_con.lab");
+}
+else { 
+	cout << endl;
+	cout << "# Try to read connected vertices from file" << endl;
+	cout << "# -----------------------------------" << endl;
+	cout << endl;
+
+	// test for already exisiting file
+	if(get_states(con_states, outfile+to_string(n)+"_con.mat") == 0 && get_labels(con_labels, outfile+to_string(n)+"_con.lab") == 0) {
+		read_con = true;
+
+		cout << "   Read " << con_states.size() << " connected vertices." << endl;
+	}
+	else {
+		cout << "   Failed." << endl;
+	}
+
 
 }
 
 
 // ---- generate product states of lower-dimensional extremal points, yielding disconnected states
+// -----------------------------------------------------------------------------------------------
 
-if(n > 1) {
+if(n > 1 && dis == true) {
 
 	cout << endl;
 	cout << "# Generate product states of lower-dimensional extremal points" << endl;
@@ -130,13 +186,17 @@ if(n > 1) {
 	// timing
 	auto t3 = chrono::high_resolution_clock::now();
 
-	auto pr_prod = pr_product_states(n, outfile+"%u.mat", outfile+"%u.lab");
+	if( pr_product_states(n, prod_states, outfile+"%u.mat", prod_labels, outfile+"%u.lab") != 0 ) {
+		cout << "Couldn't read vertices from lower-dimensional problems from files " << outfile+"%u.mat" << endl;
+		cout << "Will now hold." << endl;
+		return 1;
+	}
 
 	// timing
 	auto t4 = chrono::high_resolution_clock::now();
 	chrono::duration<double, milli> fp_ms2 = t4 - t3;
 	
-	cout << "   Found " << pr_prod.first.size() << " images of product states." << endl;
+	cout << "   Found " << prod_states.size() << " images of product states." << endl;
 	cout << "   Generation took " <<  fp_ms2.count() << " ms." << endl;
 
 	// elimination of non-extremal disconnected states
@@ -146,11 +206,11 @@ if(n > 1) {
 		cout << "# ----------------------------------------------------" << endl;
 		cout << endl;
 
-		GLPKConvexSeparation lp (pr_prod.first);
+		GLPKConvexSeparation lp (prod_states);
 		if(verbose == false) {
 			lp.set_verbosity(1);
 		}
-		lp.set_labels(pr_prod.second);
+		lp.set_labels(prod_labels);
 
 		lp.print_parameters();
 		unsigned nvertices = lp.get_nvertices();
@@ -158,61 +218,70 @@ if(n > 1) {
 		cout << "   Deleted " << nvertices - lp.get_nvertices() << " points." << endl;
 		lp.print_parameters();
 
-		pr_prod = lp.iget_vertices();
+		prod_states = lp.iget_vertices();
+		prod_labels = lp.get_labels();
 	}
 
 	// merge disconnected and connected states
-	copy(pr_prod.first.begin(), pr_prod.first.end(), back_inserter(pr_con.first));
-	copy(pr_prod.second.begin(), pr_prod.second.end(), back_inserter(pr_con.second));
+	copy(prod_states.begin(), prod_states.end(), back_inserter(con_states));
+	copy(prod_labels.begin(), prod_labels.end(), back_inserter(con_labels));
 
 	// free memory
-	pr_prod.first.clear();
-	pr_prod.first.resize(0);
-	pr_prod.first.shrink_to_fit();
-}
+	prod_labels.clear();
+	prod_labels.resize(0);
+	prod_labels.shrink_to_fit();
 
 
 
-// ----------------------------------
-// ----- final elimination round
-// ----------------------------------
+	// ----------------------------------
+	// ----- final elimination round
+	// ----------------------------------
 
-if(elim == true && n > 1) {
-
-	cout << endl;
-	cout << "-------------------------------------------------" << endl;
-	cout << "Eliminate redundant points from the total set" << endl;
-	cout << "-------------------------------------------------" << endl;
-	cout << endl;
-
-	GLPKConvexSeparation lp (pr_con.first);
+	GLPKConvexSeparation lp (con_states);
 	if(verbose == false) {
 		lp.set_verbosity(1);
 	}
-	lp.set_labels(pr_con.second);
+	lp.set_labels(con_labels);
 
-	lp.print_parameters();
-	unsigned nvertices = lp.get_nvertices();
-	lp.delete_redundant_points();
-	cout << "   Deleted " << nvertices - lp.get_nvertices() << " points." << endl;
-	lp.print_parameters();
+	if(elim == true) {
+
+		cout << endl;
+		cout << "-------------------------------------------------" << endl;
+		cout << "Eliminate redundant points from the total set" << endl;
+		cout << "-------------------------------------------------" << endl;
+		cout << endl;
+
+		lp.print_parameters();
+		unsigned nvertices = lp.get_nvertices();
+		lp.delete_redundant_points();
+		cout << "   Deleted " << nvertices - lp.get_nvertices() << " points." << endl;
+		lp.print_parameters();
+
+		con_states = lp.iget_vertices();
+		con_labels = lp.get_labels();
+	}
 
 	lp.write_constraint_matrix(outfile+to_string(n)+".coo");
 
-	pr_con = lp.iget_vertices();
+	// timing
+	auto t5 = chrono::high_resolution_clock::now();
+	chrono::duration<double, milli> fp_ms3 = t5 - t1;
+
+	cout << "Total runtime: " <<  fp_ms3.count() << " ms." << endl;
 }
 
-// timing
-auto t5 = chrono::high_resolution_clock::now();
-chrono::duration<double, milli> fp_ms3 = t5 - t1;
+if(dis == true) {
 
-cout << "Total runtime: " <<  fp_ms3.count() << " ms." << endl;
+	// ----------------------------------
+	// ----- write output
+	// ----------------------------------
 
+	write_states(con_states, outfile+to_string(n)+".mat");
+	write_labels(con_labels, outfile+to_string(n)+".lab");
 
-// ----------------------------------
-// ----- write output
-// ----------------------------------
-
-write_states(pr_con, outfile+to_string(n)+".mat", outfile+to_string(n)+".lab");
+	// this is just for comparison with older data ...
+	// sort(pr_con.first.begin(), pr_con.first.end());
+	// write_states(pr_con, outfile+to_string(n)+"_sorted.mat");
+}
 
 }

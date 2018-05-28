@@ -20,8 +20,8 @@
 #include "GLPKConvexSeparation.h"
 #endif
 
-typedef pair< vector<vector<int>>, vector<string> > int_states;
-typedef pair< vector<vector<double>>, vector<string> > double_states;
+// typedef pair< vector<vector<int>>, vector<string> > int_states;
+// typedef pair< vector<vector<double>>, vector<string> > double_states;
 
 // -----------------------------------
 // ---- Helper functions
@@ -275,34 +275,66 @@ public:
 // ---- Stabiliser generation
 // -----------------------------------
 
-// --- graph states
+// --- graph routines
 
-// read graph6 format and returns upper triangle of adjacency matrix in vectorised form
+// read graph6 format and returns the adjacency matrix in as a vector of bitstrings representing the rows
 // IMPORTANT: this implementation is quick and dirty and hence only works for graphs with less than 63 vertices (fine for me)
-binvec graph6_to_adj_mat(const string g6) {
+// vector<binvec> graph6_to_adj_mat(const string g6) {
+// 	// The input string g6 is assumed to hold a graph6 representation of the graph in ASCII-encoded form, i.e. it's a sequence of ASCII characters
+
+// 	// interprete g6 as integer
+// 	binvec x = 0;
+// 	unsigned n = (unsigned)g6.at(0)-63;
+// 	unsigned l = g6.size();
+// 	unsigned N = n*(n-1)/2;
+// 	unsigned i,j;
+// 	vector<binvec> ret (n,(binvec)0);
+
+// 	if(N > 0) {
+// 		for(i=1; i<l; i++) {
+// 			x ^= (binvec)(g6.at(i)-63) << (6*(l-i-1));
+// 		}
+// 		x = get_bits(x, 0, N-1, 6*(l-1));
+
+// 		// the just created vector has column-wise ordering, convert it to row-wise ordering
+		
+// 		for(unsigned k=0; k<N; k++) {
+// 			if(get_bit(x,k,N) == 1) {
+// 				j = get_ut_col2(k,n);
+// 				i = get_ut_row2(j,k,n);
+// 				ret.at(i) = set_bit(ret.at(i), j, n);
+// 				ret.at(j) = set_bit(ret.at(j), i, n);
+// 			}
+// 		}
+// 	}
+// 	cout << write_bits(x,N) << endl;
+
+// 	return ret;
+// }
+
+vector<binvec> graph6_to_adj_mat(const string g6) {
 	// The input string g6 is assumed to hold a graph6 representation of the graph in ASCII-encoded form, i.e. it's a sequence of ASCII characters
 
 	// interprete g6 as integer
-	binvec x = 0;
 	unsigned n = (unsigned)g6.at(0)-63;
 	unsigned l = g6.size();
 	unsigned N = n*(n-1)/2;
 	unsigned i,j;
-	binvec ret = 0;
+	vector<binvec> ret (n,0);
+	vector<binvec> x(l-1,0);
 
 	if(N > 0) {
 		for(i=1; i<l; i++) {
-			x ^= ((binvec)g6.at(i)-63) << (6*(l-i-1));
+			x.at(i-1) = (binvec)(g6.at(i)-63);
 		}
-		x = get_bits(x, 0, N-1, 6*(l-1));
 
-		// the just created vector has column-wise ordering, convert it to row-wise ordering
-		
+		// read out the bits and fill the adjacency matrix		
 		for(unsigned k=0; k<N; k++) {
-			if(get_bit(x,k,N) == 1) {
+			if(get_bit(x.at(k/6), k%6, 6) == 1) {
 				j = get_ut_col2(k,n);
 				i = get_ut_row2(j,k,n);
-				ret = set_bit(ret, get_ut_index(i,j,n), N);
+				ret.at(i) = set_bit(ret.at(i), j, n);
+				ret.at(j) = set_bit(ret.at(j), i, n);
 			}
 		}
 	}
@@ -311,43 +343,86 @@ binvec graph6_to_adj_mat(const string g6) {
 }
 
 // inverse operation
-string adj_mat_to_graph6(const binvec &A, const unsigned n) {
+// string adj_mat_to_graph6(const vector<binvec> &A) {
+// 	unsigned n = A.size();
+
+// 	assert(n < 63);
+
+// 	if(n == 0 || n == 1) {
+// 		return string(1, 63+n);
+// 	}
+
+// 	// convert row-wise ordered A to column-wise ordering
+// 	// this has to be rewritten for n > 11
+// 	binvec x = 0;
+// 	unsigned N = n*(n-1)/2;
+
+// 	for(unsigned i=0; i<n; i++) {
+// 		for(unsigned j=i+1; j<n; j++) {
+// 			if(get_bit(A.at(i),j,n) == 1) {
+// 				x = (x | (1U << (N-get_ut_index2(i,j,n)-1U)));
+// 				// x = set_bit(x, get_ut_index2(i,j,n), N);
+// 			}
+// 		}
+// 	}
+
+// 	// now convert x to a string of ASCII characters
+// 	unsigned m = N/6;
+// 	if(N%6 != 0) {
+// 		++m;
+// 	}
+// 	string ret (m+1, 63);
+
+// 	// first character encodes n
+// 	ret.at(0) = (char)(n+63);
+
+// 	// pad x with zeros to the right to yield a length which is a multiple of 6
+// 	if(N%6 != 0) {
+// 		x = x << (6-N%6);
+// 	}
+
+// 	for(unsigned k=0; k<m; k++) {
+// 		ret.at(k+1) = (char)( get_bits(x, 6*k, 6*(k+1)-1, 6*m) + 63 );
+// 	}
+
+// 	return ret;
+// }
+
+string adj_mat_to_graph6(const vector<binvec> &A) {
+	unsigned n = A.size();
+
 	assert(n < 63);
 
 	if(n == 0 || n == 1) {
 		return string(1, 63+n);
 	}
 
-	// convert row-wise ordered A to column-wise ordering
-	binvec x = 0;
+	// convert upper triangle of A to a column-wise ordered binary vector which is split in blocks of 6 bits each
 	unsigned N = n*(n-1)/2;
-	unsigned i,j;
+	unsigned m = N/6;
+	unsigned k;
 
-	for(unsigned k=0; k<N; k++) {
-		if(get_bit(A,k,N) == 1) {
-			i = get_ut_row(k,n);
-			j = get_ut_col(i,k,n);
-			x = set_bit(x, get_ut_index2(i,j,n), N);
+	if(N%6 != 0) {
+		++m;
+	}
+	vector<binvec> x(m,0);
+
+	for(unsigned i=0; i<n; i++) {
+		for(unsigned j=i+1; j<n; j++) {
+			if(get_bit(A.at(i),j,n) == 1) {
+				k = get_ut_index2(i,j,n);
+				x.at(k/6) = set_bit(x.at(k/6), k%6, 6);
+			}
 		}
 	}
 
 	// now convert x to a string of ASCII characters
-	unsigned m = N/6;
-	if(N%6 != 0) {
-		++m;
-	}
-	string ret (m+1, 63);
-
 	// first character encodes n
+	string ret (m+1, 63);	
 	ret.at(0) = (char)(n+63);
 
-	// pad x with zeros to the right to yield a length which is a multiple of 6
-	if(N%6 != 0) {
-		x = x << (6-N%6);
-	}
-
 	for(unsigned k=0; k<m; k++) {
-		ret.at(k+1) = (char)( get_bits(x, 6*k, 6*(k+1)-1, 6*m) + 63 );
+		ret.at(k+1) = (char)( x.at(k) + 63 );
 	}
 
 	return ret;
@@ -374,57 +449,12 @@ unsigned get_order_from_file(const string file) {
 	return get_order(row);
 }
 
-// reads the geng output of adjacency matrices for all non-isomorphic graphs of n vertices
-vector<binvec> read_graphs(const string file, const unsigned n) {
-	// the data format is assumed to store the upper triangle of the adjacency matrices of the graphs as e.g.
-	//    000
-	//    00
-	//    0
-	// the matrices are proceded by some header line
-	// 
-	// The matrices are stored row-wise as a bitstring and returned as a vector<binvec_short>
 
-	// open the file
-	fstream fin(file, ios::in);
+// --- graph states
 
-	vector<string> data (n-1);
-	string row;
-	unsigned counter=0;
-	unsigned idx;
-
-	vector<binvec> ret;
-
-	if(fin.is_open()) {
-		while(fin >> row) {
-			idx = counter % n;
-			if(idx != 0) {
-				data.at(idx-1) = row;
-			} 
-			if(idx == n-1) {
-				// end of block
-
-				// concatenate all strings
-				string tot;
-				for(auto str : data) {
-					tot += str;
-				}
-				// interprete as bitstring and convert to unsigned 
-				ret.push_back( stoul(tot,0,2) );
-			}
-			++counter;
-		}
-	} 
-	else {
-		cout << "Couldn't open file " << file << endl;
-	}
-
-	fin.close();
-
-	return ret;
-}
-
-vector<binvec> graph_Lagrangian(const binvec &A, const unsigned n) {
-	// This returns the representation of a graph state given in terms of a basis for the Lagrangian subspace. The graph of the graph state is specified by the upper triangle of its adjacency matrix, given as a binary vector A in Z_2^{n(n-1)/2}.
+// represents generator matrix of a graph state
+vector<binvec> graph_Lagrangian(const vector<binvec> &A, const unsigned n) {
+	// This returns the representation of a graph state given in terms of a basis for the Lagrangian subspace. The graph of the graph state is specified by its adjacency matrix, given as a vector A of bitstring representing the row vectors in Z_2^n.
 	// The basis vectors are given by the column vectors of the matrix
 	// 			(  A  )
 	// 		B = ( --- )			(in (z_1,...,z_n,x_1,...,x_n) coordinates)
@@ -437,16 +467,9 @@ vector<binvec> graph_Lagrangian(const binvec &A, const unsigned n) {
 	vector<binvec> M = coord_matrix(n);
 
 	// fill B 
-	unsigned i,j;
-
-	for(unsigned k=0; k<N; k++) {
-		if( get_bit(A, k, N) == 1) {
-			i = get_ut_row(k,n);
-			j = get_ut_col(i,k,n);
-
-			B[j] = set_bit(B[j], i, 2*n);
-			B[i] = set_bit(B[i], j, 2*n);
-		}
+	for(unsigned i=0; i<n; i++) {
+		 // since A is symmetric, row vectors = column vectors, but we have to shift the bits by n because of the lower identity block
+		B[i] = A[i] << n;
 	}
 	
 	for(unsigned j=0; j<n; j++) {
@@ -460,48 +483,6 @@ vector<binvec> graph_Lagrangian(const binvec &A, const unsigned n) {
 	return B;
 }
 
-// given the upper triangle of a symmetric matrix A with vanishing diagonal, find the size of the zero block in the upper left corner.
-// the canonical labeling of the graphs is such that this block is maximised
-// Example
-//		(0 0 1)
-// A =  (0 0 1)
-//		(1 1 0)
-// is a representative of the triangular graphs with 2 edges, which has a zero block of size 2
-unsigned find_zero_block_size(const binvec &A, const unsigned n) {
-	if(A == 0) {
-		return n;
-	}
-
-	// loop through the ones in A
-	binvec A2 = A;
-	unsigned M = n*(n-1)/2; // length of A
-	unsigned N = 8*sizeof(binvec);
-
-	unsigned pos, k, i, j;
-	unsigned size = n;
-
-	do {
-		// find the first 1 in A, counted from the right (0-based)
-		pos = N - __builtin_clzl(A2) - 1;
-
-		// flip that bit for the next loop
-		A2 = A2 ^ (1 << pos);
-
-		// now relative to the beginning of the bitstring, this gives the symmetric index of the one
-		k = M - pos - 1;
-
-		// the size of the zero block has to be <= column index of k and is at least its row index + 1
-		i = get_ut_row(k,n);
-		j = get_ut_col(i,k,n);
-
-		if(j < size) {
-			size = j;
-		}
-
-	} while( A2 != 0);
-
-	return size;	
-}
 
 // --- stabilisers 
 
@@ -527,7 +508,7 @@ vector<double> stabiliser_state(const vector<binvec> &B, const unsigned s) {
 	unsigned phase, idx;
 
 	// loop over all points a in the Lagrangian
-	for(binvec_short a=0; a<pow(2,n); a++) {
+	for(binvec a=0; a<pow(2,n); a++) {
 		idx = 0;
 
 		for(unsigned i=0; i<n; i++) {
@@ -556,15 +537,14 @@ vector<double> stabiliser_state(const vector<binvec> &B, const unsigned s) {
 
 // ---- I/O of the generated states
 
-int write_states(int_states states, string states_file, string labels_file="") {
-
+int write_states(const vector<vector<int>> &states, string states_file) {
 	// write the states
 	fstream fout(states_file, ios::out);
-	unsigned nstates = states.first.size();
+	unsigned nstates = states.size();
 
 	if(fout.is_open()) {
 		for(unsigned i=0; i<nstates; i++) {
-			for(auto c : states.first.at(i)) {
+			for(auto c : states.at(i)) {
 				fout << c << " ";
 			}
 			fout << endl;
@@ -574,37 +554,33 @@ int write_states(int_states states, string states_file, string labels_file="") {
 		cout << "Error in write_states : Couldn't open file " + states_file + " for writing" << endl;
 		return 1;
 	}
-	fout.close();
 
-	// write the labels
-	if(labels_file != "") {
-		fout.open(labels_file, ios::out);
+	return 0;
+}
 
-		if(fout.is_open()) {
-			for(unsigned i=0; i<nstates; i++) {
-				fout << states.second.at(i) << endl;
-			}	
-		}
-		else {
-			cout << "Error in write_states : Couldn't open file " + labels_file + " for writing" << endl;
-			return 1;
-		}
-		fout.close();
+int write_labels(const vector<string> &labels, string labels_file) {
+	fstream fout(labels_file, ios::out);
+	if(fout.is_open()) {
+		for(auto s : labels) {
+			fout << s << endl;
+		}	
+	}
+	else {
+		cout << "Error in write_labels : Couldn't open file " + labels_file + " for writing" << endl;
+		return 1;
 	}
 
 	return 0;
 }
 
-int_states get_states(string states_file, string labels_file="") {
+int get_states(vector<vector<int>> &states, string states_file) {
 	unsigned nstates = get_number_of_lines(states_file);
-
-	vector<vector<int>> states (nstates);
-	vector<string> labels;
-
+	
 	fstream fin(states_file, ios::in);
 	string line;
 
 	if(fin.is_open()) {
+		states.resize(nstates);
 		unsigned i = 0;
 		while(getline(fin,line)) {
 			istringstream sl (line);
@@ -619,25 +595,30 @@ int_states get_states(string states_file, string labels_file="") {
 	}
 	else {
 		cout << "Error in get_states : Couldn't open states file " + states_file + " for reading" << endl;
-	}
-	fin.close();
-
-	if(labels_file != "") {
-		fin.open(labels_file, ios::in);
-
-		if(fin.is_open()) {
-			string buf;
-			while(getline(fin,buf)) {
-				labels.push_back(buf);
-			}
-		}
-		else {
-			cout << "Error in get_states : Couldn't open labels file " + labels_file + " for reading" << endl;
-		}
-		fin.close();
+		return 1;
 	}
 
-	return make_pair(states, labels);
+	return 0;
+}
+
+int get_labels(vector<string> &labels, string labels_file) {
+	unsigned nlabels = get_number_of_lines(labels_file);
+
+	fstream fin(labels_file, ios::in);
+
+	if(fin.is_open()) {
+		labels.reserve(nlabels);
+		string buf;
+		while(getline(fin,buf)) {
+			labels.push_back(buf);
+		}
+	}
+	else {
+		cout << "Error in get_labels : Couldn't open labels file " + labels_file + " for reading" << endl;
+		return 1;
+	}	
+
+	return 0;
 }
 
 // ---- projections
@@ -665,7 +646,7 @@ vector<double> project_state(const vector<double> &state, const unsigned n) {
 	return pr_state;
 }
 
-vector<double> project_state(const vector<binvec> &B, const binvec_short s) {
+vector<double> project_state(const vector<binvec> &B, const binvec s) {
 	// --- variables
 	unsigned n = B.size();
 	vector<double> pr_state (n,0.); // 0th component is ommited since it is forced to be 1 
@@ -675,7 +656,7 @@ vector<double> project_state(const vector<binvec> &B, const binvec_short s) {
 	binvec aa;
 
 	// --- loop over all points a in the Lagrangian (except 0)
-	for(binvec_short a=1; a<pow(2,n); a++) {
+	for(binvec a=1; a<pow(2,n); a++) {
 		aa = 0;
 
 		// ----- determine the Fock component the Pauli component contributes to 
@@ -714,302 +695,17 @@ vector<double> project_state(const vector<binvec> &B, const binvec_short s) {
 
 
 struct proj_helper {
-	binvec_short a;
+	binvec a;
 	char fock_index;
 	char pauli_component;
 
-	proj_helper(binvec_short aa, char f, char p) : a(aa), fock_index(f), pauli_component(p) {
+	proj_helper(binvec aa, char f, char p) : a(aa), fock_index(f), pauli_component(p) {
 	}
 };
 
-int_states pr_stabiliser_from_graphs(const string file) {
-
-	// open the file
-	fstream fin(file, ios::in);
-
-	vector<string> graphs;
-	string row;
-
-	if(fin.is_open()) {
-		while(fin >> row) {
-			graphs.push_back(row);
-		}
-	} 
-	else {
-		cout << "Couldn't open file " << file << endl;
-	}
-
-	fin.close();
-
-	// get number of qubits
-	unsigned n = get_order( graphs.at(0) );
-	unsigned graph_len = graphs.size();
-
-	// outer loop variables
-	unsigned N = pow(2,n);
-	vector<vector<int>> states;
-	states.reserve(pow(3,n)); // estimated size
-	vector<binvec> B (n);
-	vector<binvec> SB (n);
-
-	// identifies of the projected states. labels the orbits
-	vector<string> labels; 
-	labels.reserve(pow(3,n));
-
-	// inner Lagrangian loop variables
-	vector<int> pr_state (n,0.); // 0th component is ommited since it is forced to be 1 
-	vector<proj_helper> Lagrangian_data;
-	Lagrangian_data.reserve(N/2);
-	vector<binvec> avec (n,0);
-	vector<unsigned> weights (4,0);
-	int phase;
-	binvec aa;
-
-	// representatives of the left cosets Sp(2,Z_2)/S (where S is the symplectic representation of the phase gate, S = (11,01))
-	// note that it is sufficent to only consider Hadamard gates
-	vector<vector<binvec>> cosets = { vector<binvec>({0b10,0b01}), vector<binvec>({0b01,0b10}) };
-
-	vector<vector<binvec>> LC_cosets (N);
-	vector<vector<binvec>> Slist (n);
-	for(binvec i=0; i<N; i++) {
-		for(unsigned j=0; j<n; j++) {
-			Slist.at(j) = cosets.at(get_bit(i, j, n));
-		}
-		LC_cosets.at(i) = direct_sum(Slist);
-	}
-
-	// graph state loop
-	int dist = 0;
-	binvec b = 0;
-
-	cout << "  Compute projected stabiliser states for graph" << endl;
-
-	for(unsigned g=0; g<graph_len; g++) {
-		cout << "\r    #" << g << " / " << graph_len << flush;
-		B = graph_Lagrangian( graph6_to_adj_mat( graphs.at(g) ),n);
-
-		// we have to take the local Hadamard orbit of that graph, but only on nodes/qubits which form a maximal disconnected subgraph.
-		for(binvec h=0; h<N; h++) {
-
-			for(unsigned k=0; k<n; k++) {
-				SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h), B.at(k));
-			}		
-
-			// loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
-
-			Lagrangian_data.clear();
-			for(binvec_short a=1; a<pow(2,n); a++) {
-				aa = 0;
-
-				// get coordinates w.r.t. the canonical basis
-				for(unsigned i=0; i<n; i++) {
-					avec.at(i) = get_bit(a,i,n) * SB.at(i);
-					aa ^= avec.at(i); 
-				}
-
-				// Compute the weights. Only points with zero Z weight have to be considered
-				weights = count_weights(aa,n);
-
-				if(weights.at(2) == 0) {
-					// compute Pauli component of the state corresponding to a, this is just given by a phase
-
-					// compute the "Lagrangian" phase phi which is i^phi with phi=0,2,4,...
-					// we will write it as i^phi = (-1)^(phi/2)
-					phase = phi(avec,n); 
-					phase /= 2; 
-
-					// save for later
-					Lagrangian_data.push_back(proj_helper(a, (char)(weights.at(1)+weights.at(3)), (char)pow(-1,phase)));				
-				}
-			}
-
-			// --- now, loop over phases and use the Lagrangian data computed before
-			for(binvec_short s=0; s<N; s++) {
-				// clear pr_state
-				pr_state.assign(n,0);
-
-				// note that this loop will only involve non-trivial components
-				for(binvec_short i=0; i<Lagrangian_data.size(); i++) {
-
-					// explicit stabiliser phase which is inner product of a and s 
-					phase = parity(Lagrangian_data.at(i).a & s); 
-
-					// add it to the right Fock component
-					pr_state.at(Lagrangian_data.at(i).fock_index - 1) += ( pow(-1,phase) * Lagrangian_data.at(i).pauli_component );		
-				}
-
-				// check if projected state pr_state already exists
-				// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than pr_state
-				auto it = lower_bound(states.begin(), states.end(), pr_state);
-				if(it == states.end() || pr_state < *it) {
-					// element was not redundant, so also add it to the list
-					dist = distance(states.begin(),it);
-					states.insert(it, pr_state);
-
-					// add a label
-					labels.insert(labels.begin()+dist, graphs.at(g)+" "+write_bits(h,n)+" 0 "+write_bits(s,n));
-				}
-				// note that procedures preserves the ordering in states ... 
-			}
-		}
-	}
-
-	cout << endl;
-
-	return make_pair(states,labels);
-}
-
-int_states pr_stabiliser_from_graphs2(const string file) {
-
-	// open the file
-	fstream fin(file, ios::in);
-
-	vector<string> graphs;
-	string row;
-
-	if(fin.is_open()) {
-		while(fin >> row) {
-			graphs.push_back(row);
-		}
-	} 
-	else {
-		cout << "Couldn't open file " << file << endl;
-	}
-
-	fin.close();
-
-	// get number of qubits
-	unsigned n = get_order( graphs.at(0) );
-	unsigned graph_len = graphs.size();
-
-	// outer loop variables
-	unsigned N = pow(2,n);
-	vector<vector<int>> states;
-	states.reserve(pow(3,n)); // estimated size
-	vector<binvec> B (n);
-	vector<binvec> SB (n);
-
-	// identifies of the projected states. labels the orbits
-	vector<string> labels; 
-	labels.reserve(pow(3,n));
-
-	// inner Lagrangian loop variables
-	vector<int> pr_state (n,0.); // 0th component is ommited since it is forced to be 1 
-	vector<proj_helper> Lagrangian_data;
-	Lagrangian_data.reserve(N/2);
-	vector<binvec> avec (n,0);
-	vector<unsigned> weights (4,0);
-	int phase;
-	binvec aa;
-
-	// representatives of the left cosets Sp(2,Z_2)/S (where S is the symplectic representation of the phase gate, S = (11,01))
-	// note that it is sufficent to only consider Hadamard gates
-	vector<vector<binvec>> cosets = { vector<binvec>({0b10,0b01}), vector<binvec>({0b01,0b10}) };
-
-	vector<vector<binvec>> LC_cosets (N);
-	vector<vector<binvec>> Slist (n);
-	// Changed convention here: the bits of i encode wether a Hadamard is applied to the qubits; if the j-th bit from the right is 1, apply a Hadamard to the j-th qubit
-	// Formerly: j-th bit from the left
-	// This simplifies the reduced Hadamard loop, where Hadamards are only applied to the first r qubits
-	for(binvec i=0; i<N; i++) {
-		for(unsigned j=0; j<n; j++) {
-			Slist.at(j) = cosets.at(get_bit2(i, j));
-		}
-		LC_cosets.at(i) = direct_sum(Slist);
-	}
-	// Note: This whole matrix thing can be replaced with bit manipulation
-
-	// graph state loop
-	int dist = 0;
-	binvec b = 0;
-	unsigned r = 0;
-	unsigned M = 0;
-	binvec A = 0;
-
-	cout << "  Compute projected stabiliser states for graph" << endl;
-
-	for(unsigned g=0; g<graph_len; g++) {
-		cout << "\r    #" << g << " / " << graph_len << flush;
-		A = graph6_to_adj_mat( graphs.at(g) );
-		B = graph_Lagrangian(A,n);
-
-		// we have to take the local Hadamard orbit of that graph, but only on nodes/qubits which form a maximal disconnected subgraph.
-		// in our choice of canonical graph labeling, this corresponds to the first r qubits:
-		r = find_zero_block_size(A,n);
-		M = 1<<r;
-
-		for(binvec h=0; h<M; h++) {
-
-			for(unsigned k=0; k<n; k++) {
-				SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h), B.at(k));
-			}		
-
-			// loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
-
-			Lagrangian_data.clear();
-			for(binvec_short a=1; a<pow(2,n); a++) {
-				aa = 0;
-
-				// get coordinates w.r.t. the canonical basis
-				for(unsigned i=0; i<n; i++) {
-					avec.at(i) = get_bit(a,i,n) * SB.at(i);
-					aa ^= avec.at(i); 
-				}
-
-				// Compute the weights. Only points with zero Z weight have to be considered
-				weights = count_weights(aa,n);
-
-				if(weights.at(2) == 0) {
-					// compute Pauli component of the state corresponding to a, this is just given by a phase
-
-					// compute the "Lagrangian" phase phi which is i^phi with phi=0,2,4,...
-					// we will write it as i^phi = (-1)^(phi/2)
-					phase = phi(avec,n); 
-					phase /= 2; 
-
-					// save for later
-					Lagrangian_data.push_back(proj_helper(a, (char)(weights.at(1)+weights.at(3)), (char)pow(-1,phase)));				
-				}
-			}
-
-			// --- now, loop over phases and use the Lagrangian data computed before
-			for(binvec_short s=0; s<N; s++) {
-				// clear pr_state
-				pr_state.assign(n,0);
-
-				// note that this loop will only involve non-trivial components
-				for(binvec_short i=0; i<Lagrangian_data.size(); i++) {
-
-					// explicit stabiliser phase which is inner product of a and s 
-					phase = parity(Lagrangian_data.at(i).a & s); 
-
-					// add it to the right Fock component
-					pr_state.at(Lagrangian_data.at(i).fock_index - 1) += ( pow(-1,phase) * Lagrangian_data.at(i).pauli_component );		
-				}
-
-				// check if projected state pr_state already exists
-				// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than pr_state
-				auto it = lower_bound(states.begin(), states.end(), pr_state);
-				if(it == states.end() || pr_state < *it) {
-					// element was not redundant, so also add it to the list
-					dist = distance(states.begin(),it);
-					states.insert(it, pr_state);
-
-					// add a label
-					labels.insert(labels.begin()+dist, graphs.at(g)+" "+write_bits(invert_bits(h,n),n)+" 0 "+write_bits(s,n));
-				}
-				// note that procedures preserves the ordering in states ... 
-			}
-		}
-	}
-
-	cout << endl;
-
-	return make_pair(states,labels);
-}
 
 // This tries to minimise the number of Hadmards
-int_states pr_stabiliser_from_graphs3(const string file) {
+int pr_stabiliser_from_graphs(const string file, vector<vector<int>> &states, vector<string> &labels) {
 
 	// open the file
 	fstream fin(file, ios::in);
@@ -1024,8 +720,8 @@ int_states pr_stabiliser_from_graphs3(const string file) {
 	} 
 	else {
 		cout << "Couldn't open file " << file << endl;
+		return 1;
 	}
-
 	fin.close();
 
 	// get number of qubits
@@ -1034,13 +730,11 @@ int_states pr_stabiliser_from_graphs3(const string file) {
 
 	// outer loop variables
 	unsigned N = pow(2,n);
-	vector<vector<int>> states;
 	states.reserve(pow(3,n)); // estimated size
 	vector<binvec> B (n);
 	vector<binvec> SB (n);
 
 	// identifies of the projected states. labels the orbits
-	vector<string> labels; 
 	labels.reserve(pow(3,n));
 
 	// inner Lagrangian loop variables
@@ -1072,9 +766,7 @@ int_states pr_stabiliser_from_graphs3(const string file) {
 	// graph state loop
 	int dist = 0;
 	binvec b = 0;
-	unsigned r = 0;
-	unsigned M = 0;
-	binvec A = 0;
+	vector<binvec> A;
 
 	cout << "  Compute projected stabiliser states for graph" << endl;
 
@@ -1089,10 +781,7 @@ int_states pr_stabiliser_from_graphs3(const string file) {
 			A = graph6_to_adj_mat( graphs.at(g) );
 			B = graph_Lagrangian(A,n);
 
-			// we have to take the local Hadamard orbit of that graph, but it is enough to act in a way that Hadamard nodes are not connected
-			// in our choice of canonical graph labeling, the first r qubits are not connected
-			r = find_zero_block_size(A,n);
-			M = 1<<r;
+			// we have to take the local Hadamard orbit of that graph
 
 			for(unsigned k=0; k<n; k++) {
 				SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h), B.at(k));
@@ -1101,7 +790,7 @@ int_states pr_stabiliser_from_graphs3(const string file) {
 			// loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
 
 			Lagrangian_data.clear();
-			for(binvec_short a=1; a<pow(2,n); a++) {
+			for(binvec a=1; a<N; a++) {
 				aa = 0;
 
 				// get coordinates w.r.t. the canonical basis
@@ -1127,12 +816,12 @@ int_states pr_stabiliser_from_graphs3(const string file) {
 			}
 
 			// --- now, loop over phases and use the Lagrangian data computed before
-			for(binvec_short s=0; s<N; s++) {
+			for(binvec s=0; s<N; s++) {
 				// clear pr_state
 				pr_state.assign(n,0);
 
 				// note that this loop will only involve non-trivial components
-				for(binvec_short i=0; i<Lagrangian_data.size(); i++) {
+				for(binvec i=0; i<Lagrangian_data.size(); i++) {
 
 					// explicit stabiliser phase which is inner product of a and s 
 					phase = parity(Lagrangian_data.at(i).a & s); 
@@ -1159,390 +848,7 @@ int_states pr_stabiliser_from_graphs3(const string file) {
 
 	cout << endl;
 
-	return make_pair(states,labels);
-}
-
-
-int_states pr_stabiliser_from_graphs_wloops(const string file) {
-
-	
-	// open the file
-	fstream fin(file, ios::in);
-
-	vector<string> graphs;
-	string row;
-
-	if(fin.is_open()) {
-		while(fin >> row) {
-			graphs.push_back(row);
-		}
-	} 
-	else {
-		cout << "Couldn't open file " << file << endl;
-	}
-
-	fin.close();
-
-	// get number of qubits
-	unsigned n = get_order( graphs.at(0) );
-	unsigned graph_len = graphs.size();
-
-	// outer loop variables
-	unsigned N = pow(2,n);
-	vector<vector<int>> states;
-	states.reserve(pow(3,n)); // estimated size
-	vector<binvec> B (n);
-	vector<binvec> SB (n);
-
-	// identifies of the projected states. labels the orbits
-	vector<string> labels; 
-	labels.reserve(pow(3,n));
-
-	// inner Lagrangian loop variables
-	vector<int> pr_state (n,0.); // 0th component is ommited since it is forced to be 1 
-	vector<proj_helper> Lagrangian_data;
-	Lagrangian_data.reserve(N/2);
-	vector<binvec> avec (n,0);
-	vector<unsigned> weights (4,0);
-	int phase;
-	binvec aa;
-
-	// representatives of the left cosets Sp(2,Z_2)/S (where S is the symplectic representation of the phase gate, S = (11,01))
-	// note that HS = (01,11) is missing since it is equivalent to adding all possible loops to the graph + acting with H
-	vector<vector<binvec>> cosets = { vector<binvec>({0b10,0b01}), vector<binvec>({0b01,0b10}) };
-
-	vector<vector<binvec>> LC_cosets (N);
-	vector<vector<binvec>> Slist (n);
-	for(binvec i=0; i<N; i++) {
-		for(unsigned j=0; j<n; j++) {
-			Slist.at(j) = cosets.at(get_bit(i, j, n));
-		}
-		LC_cosets.at(i) = direct_sum(Slist);
-	}
-
-	// graph state loop
-	int dist = 0;
-	binvec b = 0;
-
-	cout << "  Compute projected stabiliser states for graph" << endl;
-
-	for(unsigned g=0; g<graph_len; g++) {
-		cout << "\r    #" << g << " / " << graph_len << flush;
-		B = graph_Lagrangian( graph6_to_adj_mat( graphs.at(g) ),n);
-
-		// we have to take the local Hadamard orbit of that Lagrangian + loops
-		for(binvec h=0; h<N; h++) {
-			// loops loop
-			for(char l=0; l<=1; l++) {
-
-				if(l==0) {
-					for(unsigned k=0; k<n; k++) {
-						SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h), B.at(k));
-					}
-				}
-				else {
-					for(unsigned k=0; k<n; k++) {
-						b = B.at(k);
-						if(get_bit(h,k,n) == 1) {
-							// change the k-th basis vector / stabiliser
-							b = set_bit(b, 2*k, 2*n);
-						}
-						SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h), b);
-					}
-				}
-
-				// loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
-
-				Lagrangian_data.clear();
-				for(binvec_short a=1; a<pow(2,n); a++) {
-					aa = 0;
-
-					// get coordinates w.r.t. the canonical basis
-					for(unsigned i=0; i<n; i++) {
-						avec.at(i) = get_bit(a,i,n) * SB.at(i);
-						aa ^= avec.at(i); 
-					}
-
-					// Compute the weights. Only points with zero Z weight have to be considered
-					weights = count_weights(aa,n);
-
-					if(weights.at(2) == 0) {
-						// compute Pauli component of the state corresponding to a, this is just given by a phase
-
-						// compute the "Lagrangian" phase phi which is i^phi with phi=0,2,4,...
-						// we will write it as i^phi = (-1)^(phi/2)
-						phase = phi(avec,n); 
-						phase /= 2; 
-
-						// save for later
-						Lagrangian_data.push_back(proj_helper(a, (char)(weights.at(1)+weights.at(3)), (char)pow(-1,phase)));				
-					}
-				}
-
-				// --- now, loop over phases and use the Lagrangian data computed before
-				for(binvec_short s=0; s<N; s++) {
-					// clear pr_state
-					pr_state.assign(n,0);
-
-					// note that this loop will only involve non-trivial components
-					for(binvec_short i=0; i<Lagrangian_data.size(); i++) {
-
-						// explicit stabiliser phase which is inner product of a and s 
-						phase = parity(Lagrangian_data.at(i).a & s); 
-
-						// add it to the right Fock component
-						pr_state.at(Lagrangian_data.at(i).fock_index - 1) += ( pow(-1,phase) * Lagrangian_data.at(i).pauli_component );		
-					}
-
-					// check if projected state pr_state already exists
-					// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than pr_state
-					auto it = lower_bound(states.begin(), states.end(), pr_state);
-					if(it == states.end() || pr_state < *it) {
-						// element was not redundant, so also add it to the list
-						dist = distance(states.begin(),it);
-						states.insert(it, pr_state);
-
-						// add a label
-						labels.insert(labels.begin()+dist, graphs.at(g)+" "+write_bits(h,n)+" "+to_string(l)+" "+write_bits(s,n));
-					}
-					// note that procedures preserves the ordering in states ... 
-				}
-			}
-		}
-	}
-
-	cout << endl;
-
-	return make_pair(states,labels);
-}
-
-vector<vector<int>> pr_stabiliser_from_graph(const string file, const int gid, const unsigned n) {
-
-	// outer loop variables
-	unsigned N = pow(2,n);
-	vector<vector<int>> states;
-	states.reserve(pow(3,n)); // estimated size
-	vector<binvec> B (n);
-	vector<binvec> SB (n);
-	int _gid;
-
-	// inner Lagrangian loop variables
-	vector<int> pr_state (n,0.); // 0th component is ommited since it is forced to be 1 
-	vector<proj_helper> Lagrangian_data;
-	Lagrangian_data.reserve(N/2);
-	vector<binvec> avec (n,0);
-	vector<unsigned> weights (4,0);
-	unsigned phase;
-	binvec aa;
-
-	// generate group generated by local hadmards
-	vector<vector<binvec>> H_group = { vector<binvec>({0b10,0b01}), vector<binvec>({0b01,0b10}) };
-
-	vector<vector<binvec>> LH_group (N);
-	vector<vector<binvec>> Slist (n);
-	for(binvec i=0; i<N; i++) {
-		for(unsigned j=0; j<n; j++) {
-			Slist.at(j) = H_group.at(get_bit(i, j, n));
-		}
-		LH_group.at(i) = direct_sum(Slist);
-	}
-
-	// graph state loop
-	vector<binvec> graphs = read_graphs(file,n);
-
-	unsigned graph_len = graphs.size();
-	cout << "  Compute projected stabiliser states for maximally connected graph" << endl;
-
-	assert(abs(gid) < graph_len);
-	if(gid < 0) {
-		_gid = graph_len + gid;
-	} else {
-		_gid = gid;
-	}
-	auto th = graphs.at(_gid);
-
-	B = graph_Lagrangian(th,n);
-
-	// we have to take the local Hadamard orbit of that Lagrangian
-	for(auto S : LH_group) {
-		for(unsigned k=0; k<n; k++) {
-			SB.at(k) = matrix_vector_prod_mod2(S, B.at(k));
-		}
-
-		// --- loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
-
-		Lagrangian_data.clear();
-		for(binvec_short a=1; a<pow(2,n); a++) {
-			aa = 0;
-
-			// get coordinates w.r.t. the canonical basis
-			for(unsigned i=0; i<n; i++) {
-				avec.at(i) = get_bit(a,i,n) * SB.at(i);
-				aa ^= avec.at(i); 
-			}
-
-			// Compute the weights. Only points with zero Z weight have to be considered
-			weights = count_weights(aa,n);
-
-			if(weights.at(2) == 0) {
-				// compute Pauli component of the state corresponding to a, this is just given by a phase
-
-				// compute the "Lagrangian" phase phi which is i^phi with phi=0,2,4,...
-				// we will write it as i^phi = (-1)^(phi/2)
-				phase = phi(avec,n); 
-				phase /= 2; 
-
-				// save for later
-				Lagrangian_data.push_back(proj_helper(a, (char)(weights.at(1)+weights.at(3)), (char)pow(-1,phase)));				
-			}
-
-		}
-
-		// --- now, loop over phases and use the Lagrangian data computed before
-		for(binvec_short s=0; s<N; s++) {
-			// clear pr_state
-			pr_state.assign(n,0);
-
-			// note that this loop will only involve non-trivial components
-			for(binvec_short i=0; i<Lagrangian_data.size(); i++) {
-
-				// explicit stabiliser phase which is inner product of a and s 
-				phase = parity(Lagrangian_data.at(i).a & s); 
-
-				// add it to the right Fock component
-				pr_state.at(Lagrangian_data.at(i).fock_index - 1) += pow(-1,phase) * Lagrangian_data.at(i).pauli_component;		
-			}
-
-			// check if projected state pr_state already exists
-			// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than pr_state
-			auto it = lower_bound(states.begin(), states.end(), pr_state);
-			if(it == states.end() || pr_state < *it) {
-				// element was not redundant, so also add it to the list
-				states.insert(it, pr_state);
-			}
-			// note that procedures preserves the ordering in states ... 
-		}
-	}
-
-	cout << endl;
-
-	return states;
-}
-
-GLPKConvexSeparation pr_stabiliser_from_graphs_conv(const string file, const unsigned n) {
-
-	// outer loop variables
-	unsigned N = pow(2,n);
-	vector<vector<int>> states;
-	states.reserve(pow(3,n)); // estimated size
-	vector<binvec> B (n);
-	vector<binvec> SB (n);
-
-	// we keep a GLPKConvexSeparation object to check if elements that we want to add to the list are in the convex hull of the previous ones
-	GLPKConvexSeparation lp (n);
-	lp.set_verbosity(1);
-
-	// inner Lagrangian loop variables
-	vector<int> pr_state (n,0.); // 0th component is ommited since it is forced to be 1 
-	vector<proj_helper> Lagrangian_data;
-	Lagrangian_data.reserve(N/2);
-	vector<binvec> avec (n,0);
-	vector<unsigned> weights (4,0);
-	unsigned phase;
-	binvec aa;
-
-	// generate group generated by local hadmards
-	vector<vector<binvec>> H_group = { vector<binvec>({0b10,0b01}), vector<binvec>({0b01,0b10}) };
-
-	vector<vector<binvec>> LH_group (N);
-	vector<vector<binvec>> Slist (n);
-	for(binvec i=0; i<N; i++) {
-		for(unsigned j=0; j<n; j++) {
-			Slist.at(j) = H_group.at(get_bit(i, j, n));
-		}
-		LH_group.at(i) = direct_sum(Slist);
-	}
-
-	// graph state loop
-	vector<binvec> graphs = read_graphs(file,n);
-
-	unsigned counter = 1;
-	unsigned graph_len = graphs.size();
-	cout << "  Compute projected stabiliser states for graph" << endl;
-
-	for(unsigned g=0; g<graph_len; g++) {
-		cout << "\r    #" << counter << " / " << graph_len << flush;
-		B = graph_Lagrangian(graphs.at(g),n);
-
-		// we have to take the local Hadamard orbit of that Lagrangian
-		for(binvec h=0; h<N; h++) {
-			for(unsigned k=0; k<n; k++) {
-				SB.at(k) = matrix_vector_prod_mod2(LH_group.at(h), B.at(k));
-			}
-
-			// --- loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
-
-			Lagrangian_data.clear();
-			for(binvec_short a=1; a<pow(2,n); a++) {
-				aa = 0;
-
-				// get coordinates w.r.t. the canonical basis
-				for(unsigned i=0; i<n; i++) {
-					avec.at(i) = get_bit(a,i,n) * SB.at(i);
-					aa ^= avec.at(i); 
-				}
-
-				// Compute the weights. Only points with zero Z weight have to be considered
-				weights = count_weights(aa,n);
-
-				if(weights.at(2) == 0) {
-					// compute Pauli component of the state corresponding to a, this is just given by a phase
-
-					// compute the "Lagrangian" phase phi which is i^phi with phi=0,2,4,...
-					// we will write it as i^phi = (-1)^(phi/2)
-					phase = phi(avec,n); 
-					phase /= 2; 
-
-					// save for later
-					Lagrangian_data.push_back(proj_helper(a, (char)(weights.at(1)+weights.at(3)), (char)pow(-1,phase)));				
-				}
-
-			}
-
-			// --- now, loop over phases and use the Lagrangian data computed before
-			for(binvec_short s=0; s<N; s++) {
-				// clear pr_state
-				pr_state.assign(n,0);
-
-				// note that this loop will only involve non-trivial components
-				for(binvec_short i=0; i<Lagrangian_data.size(); i++) {
-
-					// explicit stabiliser phase which is inner product of a and s 
-					phase = parity(Lagrangian_data.at(i).a & s); 
-
-					// add it to the right Fock component
-					pr_state.at(Lagrangian_data.at(i).fock_index - 1) += pow(-1,phase) * Lagrangian_data.at(i).pauli_component;		
-				}
-
-				// check if projected state pr_state already exists
-				// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than pr_state
-				auto it = lower_bound(states.begin(), states.end(), pr_state);
-				if(it == states.end() || pr_state < *it) {
-					// the element is new, check now for convex dependence
-					if(lp.add_vertex(pr_state, to_string(g)+" "+write_bits(h,n)+" "+write_bits(s,n)) == 0) {
-						// element was not redundant, so also add it to the list
-						states.insert(it, pr_state);
-					}
-				}
-				// note that procedures preserves the ordering in states ... 
-			}
-		}
-		++counter;
-	}
-
-	cout << endl;
-
-	return lp;
+	return 0;
 }
 
 // ---- routines that rely on connectedness
@@ -1552,7 +858,7 @@ GLPKConvexSeparation pr_stabiliser_from_graphs_conv(const string file, const uns
 //  2. W.r.t. to the signs of the n generators
 //
 // The cosets are represented by {I,H,HS} and S can be effectively implemented by switching the representative diagonal entry of the adjacency matrix of the graph from 0 to 1.
-int_states pr_stabiliser_from_LCgraphs(const string file) {
+int pr_stabiliser_from_LCgraphs(const string file, vector<vector<int>> &states, vector<string> &labels) {
 	
 	// open the file
 	fstream fin(file, ios::in);
@@ -1567,159 +873,7 @@ int_states pr_stabiliser_from_LCgraphs(const string file) {
 	} 
 	else {
 		cout << "Couldn't open file " << file << endl;
-	}
-
-	fin.close();
-
-	// get number of qubits
-	unsigned n = get_order( graphs.at(0) );
-	unsigned graph_len = graphs.size();
-
-	// outer loop variables
-	unsigned N = pow(2,n);
-	vector<vector<int>> states;
-	states.reserve(pow(3,n)); // estimated size
-	vector<binvec> B (n);
-	vector<binvec> SB (n);
-
-	// identifies of the projected states. labels the orbits
-	vector<string> labels; 
-	labels.reserve(pow(3,n));
-
-	// inner Lagrangian loop variables
-	vector<int> pr_state (n,0.); // 0th component is ommited since it is forced to be 1 
-	vector<proj_helper> Lagrangian_data;
-	Lagrangian_data.reserve(N/2);
-	vector<binvec> avec (n,0);
-	vector<unsigned> weights (4,0);
-	int phase;
-	binvec aa;
-
-	// representatives of the left cosets Sp(2,Z_2)/S (where S is the symplectic representation of the phase gate, S = (11,01))
-	// note that HS = (01,11) is missing since it is equivalent to adding all possible loops to the graph + acting with H
-	vector<vector<binvec>> cosets = { vector<binvec>({0b10,0b01}), vector<binvec>({0b01,0b10}) };
-
-	vector<vector<binvec>> LC_cosets (N);
-	vector<vector<binvec>> Slist (n);
-	for(binvec i=0; i<N; i++) {
-		for(unsigned j=0; j<n; j++) {
-			Slist.at(j) = cosets.at(get_bit(i, j, n));
-		}
-		LC_cosets.at(i) = direct_sum(Slist);
-	}
-
-	// graph state loop
-	int dist = 0;
-	binvec b = 0;
-
-	cout << "  Compute projected stabiliser states for graph" << endl;
-
-	for(unsigned g=0; g<graph_len; g++) {
-		cout << "\r    #" << g+1 << " / " << graph_len << flush;
-		B = graph_Lagrangian( graph6_to_adj_mat( graphs.at(g) ),n);
-
-		// we have to take the local Hadamard orbit of that Lagrangian + loops
-		for(binvec h=0; h<N; h++) {
-			// loops loop
-			for(char l=0; l<=1; l++) {
-
-				if(l==0) {
-					for(unsigned k=0; k<n; k++) {
-						SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h), B.at(k));
-					}
-				}
-				else {
-					for(unsigned k=0; k<n; k++) {
-						b = B.at(k);
-						if(get_bit(h,k,n) == 1) {
-							// if we act we Hadamard on that qubit, change the k-th basis vector / stabiliser
-							// this toggles the Z bit of the k-th stabiliser, yielding a Y = SXS^-1
-							b = set_bit(b, 2*k, 2*n);
-						}
-						SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h), b);
-					}
-				}
-
-				// loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
-
-				Lagrangian_data.clear();
-				for(binvec_short a=1; a<pow(2,n); a++) {
-					aa = 0;
-
-					// get coordinates w.r.t. the canonical basis
-					for(unsigned i=0; i<n; i++) {
-						avec.at(i) = get_bit(a,i,n) * SB.at(i);
-						aa ^= avec.at(i); 
-					}
-
-					// Compute the weights. Only points with zero Z weight have to be considered
-					weights = count_weights(aa,n);
-
-					if(weights.at(2) == 0) {
-						// compute Pauli component of the state corresponding to a, this is just given by a phase
-
-						// compute the "Lagrangian" phase phi which is i^phi with phi=0,2,4,...
-						// we will write it as i^phi = (-1)^(phi/2)
-						phase = phi(avec,n); 
-						phase /= 2; 
-
-						// save for later
-						Lagrangian_data.push_back(proj_helper(a, (char)(weights.at(1)+weights.at(3)), (char)pow(-1,phase)));				
-					}
-				}
-
-				// --- now, loop over phases and use the Lagrangian data computed before
-				for(binvec_short s=0; s<N; s++) {
-					// clear pr_state
-					pr_state.assign(n,0);
-
-					// note that this loop will only involve non-trivial components
-					for(binvec_short i=0; i<Lagrangian_data.size(); i++) {
-
-						// explicit stabiliser phase which is inner product of a and s 
-						phase = parity(Lagrangian_data.at(i).a & s); 
-
-						// add it to the right Fock component
-						pr_state.at(Lagrangian_data.at(i).fock_index - 1) += ( pow(-1,phase) * Lagrangian_data.at(i).pauli_component );		
-					}
-
-					// check if projected state pr_state already exists
-					// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than pr_state
-					auto it = lower_bound(states.begin(), states.end(), pr_state);
-					if(it == states.end() || pr_state < *it) {
-						// element was not redundant, so also add it to the list
-						dist = distance(states.begin(),it);
-						states.insert(it, pr_state);
-
-						// add a label
-						labels.insert(labels.begin()+dist, graphs.at(g)+" "+write_bits(h,n)+" "+to_string(l)+" "+write_bits(s,n));
-					}
-					// note that procedures preserves the ordering in states ... 
-				}
-			}
-		}
-	}
-
-	cout << endl;
-
-	return make_pair(states,labels);
-}
-
-int_states pr_stabiliser_from_LCgraphs2(const string file) {
-	
-	// open the file
-	fstream fin(file, ios::in);
-
-	vector<string> graphs;
-	string row;
-
-	if(fin.is_open()) {
-		while(fin >> row) {
-			graphs.push_back(row);
-		}
-	} 
-	else {
-		cout << "Couldn't open file " << file << endl;
+		return 1;
 	}
 
 	fin.close();
@@ -1731,17 +885,15 @@ int_states pr_stabiliser_from_LCgraphs2(const string file) {
 	// outer loop variables
 	unsigned N = pow(2,n);
 	unsigned M = pow(3,n);
-	vector<vector<int>> states;
 	states.reserve(M); // estimated size
 	vector<binvec> B (n);
 	vector<binvec> SB (n);
 
 	// identifies of the projected states. labels the orbits
-	vector<string> labels; 
 	labels.reserve(M);
 
 	// inner Lagrangian loop variables
-	vector<int> pr_state (n,0.); // 0th component is ommited since it is forced to be 1 
+	vector<int> pr_state (n,0); // 0th component is ommited since it is forced to be 1 
 	vector<proj_helper> Lagrangian_data;
 	Lagrangian_data.reserve(N/2);
 	vector<binvec> avec (n,0);
@@ -1785,7 +937,7 @@ int_states pr_stabiliser_from_LCgraphs2(const string file) {
 			// loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
 
 			Lagrangian_data.clear();
-			for(binvec_short a=1; a<pow(2,n); a++) {
+			for(binvec a=1; a<N; a++) {
 				aa = 0;
 
 				// get coordinates w.r.t. the canonical basis
@@ -1811,17 +963,18 @@ int_states pr_stabiliser_from_LCgraphs2(const string file) {
 			}
 
 			// --- now, loop over phases and use the Lagrangian data computed before
-			for(binvec_short s=0; s<N; s++) {
+			for(binvec s=0; s<N; s++) {
 				// clear pr_state
 				pr_state.assign(n,0);
 
 				// note that this loop will only involve non-trivial components
-				for(binvec_short i=0; i<Lagrangian_data.size(); i++) {
+				for(binvec i=0; i<Lagrangian_data.size(); i++) {
 
 					// explicit stabiliser phase which is inner product of a and s 
 					phase = parity(Lagrangian_data.at(i).a & s); 
 
 					// add it to the right Fock component
+					// cout << (unsigned)Lagrangian_data.at(i).fock_index << endl;
 					pr_state.at(Lagrangian_data.at(i).fock_index - 1) += ( pow(-1,phase) * Lagrangian_data.at(i).pauli_component );		
 				}
 
@@ -1843,9 +996,8 @@ int_states pr_stabiliser_from_LCgraphs2(const string file) {
 
 	cout << endl;
 
-	return make_pair(states,labels);
+	return 0;
 }
-
 
 
 // ---- computes the projections of product states
@@ -1894,13 +1046,11 @@ string pr_product_label(string label1, string label2) {
 	}
 
 	// get the graph6 representation of the product graph
-	binvec A1 = graph6_to_adj_mat(c1.at(0));
-	binvec A2 = graph6_to_adj_mat(c2.at(0));
-	unsigned n1 = get_order(c1.at(0));
-	unsigned n2 = get_order(c2.at(0));
-	binvec A = direct_sum_ut(A1, n1, A2, n2);
+	vector<binvec> A1 = graph6_to_adj_mat(c1.at(0));
+	vector<binvec> A2 = graph6_to_adj_mat(c2.at(0));
+	vector<binvec> A = direct_sum(A1, A2);
 
-	string ret = adj_mat_to_graph6(A, n1+n2);
+	string ret = adj_mat_to_graph6(A);
 
 	// concatenate the operator and sign encoding
 	ret += " "+c1.at(1)+c2.at(1);
@@ -1926,17 +1076,18 @@ vector<int> pr_product_state(vector<vector<int>> states) {
 }
 
 // filename templates are assumed to contain placeholder like %d for system size
-int_states pr_product_states(unsigned n, string states_file_tpl, string labels_file_tpl="") {
-	// TBD: LABELS
+int pr_product_states(unsigned n, vector<vector<int>> &states, string states_file_tpl, vector<string> &labels, string labels_file_tpl="") {
 
 	//  get partitions of n
 	auto partitions = get_partitions(n);
 
-	vector<vector<int>> states;
-	vector<string> labels;
+	// clear containers
+	states.clear();
+	labels.clear();
 
 	// read vertices 
-	vector<int_states> vertices (n-1);
+	vector<vector<vector<int>>> vstates (n-1);
+	vector<vector<string>> vlabels (n-1);
 	vector<unsigned> nvertices (n-1);
 
 	for(unsigned i=0; i<n-1; i++) {
@@ -1945,16 +1096,20 @@ int_states pr_product_states(unsigned n, string states_file_tpl, string labels_f
 
 		snprintf(fstate, 2*states_file_tpl.size(), states_file_tpl.c_str(), i+1);
 
+		if(get_states(vstates.at(i), string(fstate)) != 0) {
+			return 1;
+		}
+
 		if(labels_file_tpl != "") {
 			snprintf(flabel, 2*labels_file_tpl.size(), labels_file_tpl.c_str(), i+1);
 
-			vertices.at(i) = get_states(string(fstate), string(flabel));
+			if(get_labels(vlabels.at(i), string(flabel)) != 0) {
+				return 1;
+			}
+
 		}
-		else {
-			vertices.at(i) = get_states(string(fstate));
-		}
-		
-		nvertices.at(i) = vertices.at(i).first.size();
+
+		nvertices.at(i) = vstates.at(i).size();
 
 		delete[] fstate;
 		delete[] flabel;
@@ -1983,10 +1138,10 @@ int_states pr_product_states(unsigned n, string states_file_tpl, string labels_f
 		for(unsigned i=0; i<N; i++) {
 			get_multi_index(nv, i, ind);
 
-			state = vertices.at( p->at(0)-1 ).first.at( ind.at(0) );
+			state = vstates.at( p->at(0)-1 ).at( ind.at(0) );
 
 			for(unsigned k=1; k<L; k++) {
-				state = pr_product_state( state, vertices.at( p->at(k)-1 ).first.at( ind.at(k) ) );
+				state = pr_product_state( state, vstates.at( p->at(k)-1 ).at( ind.at(k) ) );
 			}
 
 			// check if state already exists in the list
@@ -1998,9 +1153,9 @@ int_states pr_product_states(unsigned n, string states_file_tpl, string labels_f
 				states.insert(it, state);
 
 				// add a label
-				label = vertices.at( p->at(0)-1 ).second.at( ind.at(0) );
+				label = vlabels.at( p->at(0)-1 ).at( ind.at(0) );
 				for(unsigned k=1; k<L; k++) {
-					label = pr_product_label( label, vertices.at( p->at(k)-1 ).second.at( ind.at(k) ) );
+					label = pr_product_label( label, vlabels.at( p->at(k)-1 ).at( ind.at(k) ) );
 				}
 				
 				labels.insert(labels.begin()+dist, label);
@@ -2008,7 +1163,7 @@ int_states pr_product_states(unsigned n, string states_file_tpl, string labels_f
 		}
 	}
 
-	return make_pair(states, labels);
+	return 0;
 }
 
 

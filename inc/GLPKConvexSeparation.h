@@ -712,22 +712,22 @@ public:
 		return _labels;
 	}
 
-	pair< vector<vector<double>>, vector<string> > get_vertices() {
+	vector<vector<double>> get_vertices() {
 		vector<vector<double>> ret (get_nvertices(), vector<double>(_dim));
 		for(unsigned i=0; i<ret.size(); i++) {
 			ret.at(i) = get_vertex(i);
 		}
 
-		return make_pair(ret,_labels);
+		return ret;
 	}
 
-	pair< vector<vector<int>>, vector<string> > iget_vertices() {
+	vector<vector<int>> iget_vertices() {
 		vector<vector<int>> ret (get_nvertices(), vector<int>(_dim));
 		for(unsigned i=0; i<ret.size(); i++) {
 			ret.at(i) = iget_vertex(i);
 		}
 
-		return make_pair(ret,_labels);
+		return ret;
 	}
 
 	// set methods

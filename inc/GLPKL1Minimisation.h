@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <glpk.h>
+#include <cassert>
 
 #ifndef GLPKFORMAT_H
 #include "GLPKFormat.h"

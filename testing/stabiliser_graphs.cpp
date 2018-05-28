@@ -51,30 +51,54 @@ if(fin.is_open()) {
 	while(fin >> row) {
 		graphs.push_back(row);
 	}
+
+	cout << "Read " << graphs.size() << " graphs." << endl;
+
+	// convert graph6 to adjacency matrices and back
+	unsigned n = get_order(graphs.at(0));
+
+	// print
+	cout << "Check if conversion works ... " << endl;
+	vector<binvec> adj_mat;
+	for(unsigned k=0; k<graphs.size(); k++) {
+		adj_mat = graph6_to_adj_mat(graphs.at(k));
+		if(adj_mat_to_graph6(adj_mat) != graphs.at(k)) {
+			cout << "Fail at graph #" << k << endl;
+			cout << "Got " << adj_mat_to_graph6(adj_mat) << " instead of " << graphs.at(k) << endl;
+		}
+
+	}
+	cout << "Done" << endl;
+
+	// now check product labeling
+	string label1 = graphs.at(0)+" ";
+	for(unsigned i=0; i<n; i++)
+		label1 += "0";
+	label1 += " ";
+	for(unsigned i=0; i<n; i++)
+		label1 += "0";
+
+	string label2 = graphs.at(1)+" ";
+	for(unsigned i=0; i<n; i++)
+		label2 += "0";
+	label2 += " ";
+	for(unsigned i=0; i<n; i++)
+		label2 += "0";
+
+	string label = pr_product_label(label1, label2);
+
+	cout << "Product of " << endl;
+	cout << label1 << endl;
+	cout << "and" << endl;
+	cout << label2 << endl;
+	cout << "is" << endl;
+	cout << label << endl;
+
 } 
 else {
 	cout << "Couldn't open file " << infile << endl;
 }
 fin.close();
-
-cout << "Read " << graphs.size() << " graphs." << endl;
-
-// convert graph6 to adjacency matrices and back
-vector<binvec> adj_mat;
-unsigned n = get_order(graphs.at(0));
-for(auto g : graphs) {
-	adj_mat.push_back( graph6_to_adj_mat(g) );
-}
-
-// print
-cout << "Check if conversion works ... " << endl;
-for(unsigned k=0; k<adj_mat.size(); k++) {
-	if(adj_mat_to_graph6(adj_mat.at(k), n) != graphs.at(k)) {
-		cout << "Fail at graph #" << k << endl;
-	}
-}
-cout << "Done" << endl;
-
 
 
 }

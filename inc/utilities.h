@@ -7,13 +7,12 @@
 #include <fstream>
 #include <iostream>
 #include <random>
-#include <eigen3/Eigen/Sparse>
 #include <tuple>
 #include <cblas.h>
+#include <cstdint>
 
 
 using namespace std;
-using namespace Eigen;
 
 /* Utilities header file 
 	For usage with the noise propagation code. 
@@ -83,15 +82,15 @@ vector<vector<unsigned>> get_partitions(unsigned n) {
 
 // careful! This function applies the transposed matrix A^T to x ...
 // in my case, this is convenient since ColMajor layout is faster
-vector<double> my_matrix_vector_prod(const vector<double> &A, const vector<double> &x) {
-	unsigned N = x.size(); // N = 4^n
-	vector<double> y(N,0);
+// vector<double> my_matrix_vector_prod(const vector<double> &A, const vector<double> &x) {
+// 	unsigned N = x.size(); // N = 4^n
+// 	vector<double> y(N,0);
 
-	// transform
-	cblas_dgemv(CblasColMajor,CblasNoTrans,N,N,1.0,A.data(),N,x.data(),1,0.0,y.data(),1);
+// 	// transform
+// 	cblas_dgemv(CblasColMajor,CblasNoTrans,N,N,1.0,A.data(),N,x.data(),1,0.0,y.data(),1);
 
-	return y;
-}
+// 	return y;
+// }
 
 unsigned factorial(const unsigned n) {
 	unsigned f = 1;
@@ -224,78 +223,6 @@ inline unsigned get_ut_row2(const unsigned j, const unsigned k, const unsigned n
 
 // conversion of upper-triangle storage to dense storage for symmetric matrices
 
-
-
-// ----- bit manipulation
-
-unsigned popcount(unsigned i) {
-	return __builtin_popcount(i);
-}
-
-unsigned parity(unsigned i) {
-	return __builtin_parity(i);
-}
-
-
-// get j-th bit of b, counted from the end of the bitstring, i.e. from the left
-inline unsigned get_bit(unsigned b, unsigned j, unsigned n) {
-	return ((b >> ((n)-(j)-1U)) & 1U);
-}
-
-// get j-th bit of b, counted from the from the right
-inline unsigned get_bit2(unsigned b, unsigned j) {
-	return ((b >> j) & 1U);
-}
-
-inline unsigned get_bits(unsigned b, unsigned j, unsigned k, unsigned n) {
-	return ((b >> (n-k-1U)) & ((1U << (k-j+1U))-1));
-}
-
-inline unsigned set_bit(unsigned b, unsigned j, unsigned n) {
-	return (b | (1 << (n-j-1U)));
-}
-
-inline unsigned reset_bit(unsigned b, unsigned j, unsigned n) {
-	return (b & (~(1 << (n-j-1U))));
-}
-
-string write_bits(unsigned b, unsigned n) {
-	string str;
-
-	for(unsigned j=0; j<n; j++) {
-		str += to_string(get_bit(b,j,n)); 
-	}
-
-	return str;
-}
-
-string write_trits(unsigned t, unsigned n) {
-	string str;
-
-	vector<unsigned> trits(n,0);
-	get_multi_index(n, 3, t, trits);
-
-	for(unsigned j=0; j<n; j++) {
-		str += to_string( trits.at(j) ); 
-	}
-
-	return str;
-}
-
-unsigned invert_bits(const unsigned b, const unsigned n) {
-	// Returns a copy of b with inverted ordering of bits, e.g.
-	// 		0010110 ---> 0110100
-	// Note that this function "sees" only the first n bits, all the other bits are set to zero. I.e. calling the function for b = 0010110 with n = 6 will instead give
-	// 		0010110 ---> 0011010
-
-	unsigned r = 0;
-	for(unsigned i=0; i<n; i++) {
-		if(get_bit(b,i,n) == 1) {
-			r |= 1<<i;
-		}
-	}
-	return r;
-}
 
 
 // ----- input / output
