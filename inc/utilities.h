@@ -24,6 +24,35 @@ using namespace std;
 */
 
 
+// --- data type for points
+template <class T>
+struct LabelledPoint {
+	vector<T> point;
+	string label;
+
+	LabelledPoint(unsigned n) : point(n) {};
+	LabelledPoint() {};
+
+	unsigned size() {
+		return point.size();
+	}
+
+	void clear() {
+		point.assign(point.size(),0);
+		label.clear();
+	}
+
+	bool operator<(const LabelledPoint<T>& rhs)
+    {
+        return this->point < rhs.point;
+    }
+
+    inline bool operator> (const LabelledPoint<T>& rhs){ return rhs < (*this); }
+	inline bool operator<=(const LabelledPoint<T>& rhs){ return !((*this) > rhs); }
+	inline bool operator>=(const LabelledPoint<T>& rhs){ return !((*this) < rhs); }
+
+};
+
 
 // ----- helpers
 

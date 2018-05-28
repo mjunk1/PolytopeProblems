@@ -208,7 +208,7 @@ public:
 
 	}
 
-	GLPKConvexSeparation(vector<vector<int>> cmatrix) {
+	GLPKConvexSeparation(vector<vector<int>>& cmatrix) {
 		// reading vertex coordinates and parameters
 		if(read_vertex_matrix(cmatrix) != 0) {
 			exit (EXIT_FAILURE);
@@ -219,16 +219,21 @@ public:
 
 	}
 
-	// GLPKConvexSeparation(SparseMatrix<double,RowMajor>& vertex_matrix) {
-	// 	// reading vertex coordinates and parameters
-	// 	if(read_vertex_matrix(vertex_matrix) != 0) {
-	// 		exit (EXIT_FAILURE);
-	// 	}
+	GLPKConvexSeparation(vector<LabelledPoint<int>>& cmatrix) {
+		// reading vertex coordinates and parameters
+		if(read_vertex_matrix(cmatrix) != 0) {
+			exit (EXIT_FAILURE);
+		}
 
-	// 	// setting parameter struct to default values
-	// 	glp_init_smcp(&_parm);
+		// setting parameter struct to default values
+		glp_init_smcp(&_parm);
 
-	// }
+		// setting labels
+		for(unsigned i=0; i<get_nvertices(); i++) {
+			_labels.at(i) = cmatrix.at(i).label;
+		}
+
+	}
 
 	// Copy constructor
 	GLPKConvexSeparation(const GLPKConvexSeparation& other) :
@@ -330,7 +335,13 @@ public:
 		return 0;
 	}
 
-	int read_vertex_matrix(vector<vector<int>> cmatrix) {
+	int read_vertex_matrix(vector<vector<int>>& cmatrix) {
+		GLPKFormat data = to_GLPK_format(cmatrix);
+		update_problem(data);
+		return 0;
+	}
+
+	int read_vertex_matrix(vector<LabelledPoint<int>>& cmatrix) {
 		GLPKFormat data = to_GLPK_format(cmatrix);
 		update_problem(data);
 		return 0;
@@ -633,7 +644,7 @@ public:
 		}
 	}
 
-	void set_labels(vector<string> labels) {
+	void set_labels(vector<string>& labels) {
 		assert(labels.size() == get_nvertices());
 		_labels = labels;
 	}
@@ -725,6 +736,16 @@ public:
 		vector<vector<int>> ret (get_nvertices(), vector<int>(_dim));
 		for(unsigned i=0; i<ret.size(); i++) {
 			ret.at(i) = iget_vertex(i);
+		}
+
+		return ret;
+	}
+
+	vector<LabelledPoint<int>> iget_labelled_vertices() {
+		vector<LabelledPoint<int>> ret (get_nvertices());
+		for(unsigned i=0; i<ret.size(); i++) {
+			ret.at(i).point = iget_vertex(i);
+			ret.at(i).label = _labels.at(i);
 		}
 
 		return ret;
