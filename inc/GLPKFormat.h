@@ -24,7 +24,7 @@ struct GLPKFormat {
 };
 
 // reads sparse matrix in COO format and saves to struct
-GLPKFormat to_GLPK_format(string cmatrix_file, bool transpose=false) {
+GLPKFormat to_GLPK_format(const string cmatrix_file, bool transpose=false) {
 	GLPKFormat ret;
 
 	// number of non-zero values
@@ -74,61 +74,109 @@ GLPKFormat to_GLPK_format(string cmatrix_file, bool transpose=false) {
 }
 
 // reads dense list of row vectors and saves to struct
-GLPKFormat to_GLPK_format(vector<vector<int>> matrix) {
+GLPKFormat to_GLPK_format(const vector<vector<int>>& matrix,  bool transpose=false) {
 	GLPKFormat ret;
 
-	// save number of rows and columns
-	ret.nrows = matrix.size();
-	ret.ncols = matrix.at(0).size();
+	if(transpose == false) {
+		// save number of rows and columns
+		ret.nrows = matrix.size();
+		ret.ncols = matrix.at(0).size();
 
-	// number of non-zero values
-	ret.non_zeros = ret.nrows * ret.ncols;
+		// number of non-zero values
+		ret.non_zeros = ret.nrows * ret.ncols;
 
-	// GLPK convention: data start at index 1
-	ret.rows = vector<int> (ret.non_zeros+1,0);
-	ret.cols = vector<int> (ret.non_zeros+1,0);
-	ret.values = vector<double> (ret.non_zeros+1,0.);
+		// GLPK convention: data start at index 1
+		ret.rows = vector<int> (ret.non_zeros+1,0);
+		ret.cols = vector<int> (ret.non_zeros+1,0);
+		ret.values = vector<double> (ret.non_zeros+1,0.);
 
-	// convert data
-	for(unsigned i=0; i<ret.nrows; i++) {
-		for(unsigned j=0; j<ret.ncols; j++) {
-			ret.rows.at( ret.ncols*i + j + 1 ) = i+1;
-			ret.cols.at( ret.ncols*i + j + 1 ) = j+1;
-			ret.values.at( ret.ncols*i + j + 1 ) = (double)(matrix.at(i).at(j));
-		}
-	}	
+		// convert data
+		for(unsigned i=0; i<ret.nrows; i++) {
+			for(unsigned j=0; j<ret.ncols; j++) {
+				ret.rows.at( ret.ncols*i + j + 1 ) = i+1;
+				ret.cols.at( ret.ncols*i + j + 1 ) = j+1;
+				ret.values.at( ret.ncols*i + j + 1 ) = (double)(matrix.at(i).at(j));
+			}
+		}	
+	}
+	else {
+		// save number of rows and columns
+		ret.ncols = matrix.size();
+		ret.nrows = matrix.at(0).size();
+
+		// number of non-zero values
+		ret.non_zeros = ret.nrows * ret.ncols;
+
+		// GLPK convention: data start at index 1
+		ret.rows = vector<int> (ret.non_zeros+1,0);
+		ret.cols = vector<int> (ret.non_zeros+1,0);
+		ret.values = vector<double> (ret.non_zeros+1,0.);
+
+		// convert data
+		for(unsigned i=0; i<ret.nrows; i++) {
+			for(unsigned j=0; j<ret.ncols; j++) {
+				ret.rows.at( ret.ncols*i + j + 1 ) = i+1;
+				ret.cols.at( ret.ncols*i + j + 1 ) = j+1;
+				ret.values.at( ret.ncols*i + j + 1 ) = (double)(matrix.at(j).at(i));
+			}
+		}	
+
+	}
 
 	return ret;
 }
 
-GLPKFormat to_GLPK_format(vector<LabelledPoint<int>> matrix) {
+GLPKFormat to_GLPK_format(const vector<LabelledState>& matrix, bool transpose=false) {
 	GLPKFormat ret;
 
-	// save number of rows and columns
-	ret.nrows = matrix.size();
-	ret.ncols = matrix.at(0).size();
+	if(transpose == false) {
+		// save number of rows and columns
+		ret.nrows = matrix.size();
+		ret.ncols = matrix.at(0).size();
 
-	// number of non-zero values
-	ret.non_zeros = ret.nrows * ret.ncols;
+		// number of non-zero values
+		ret.non_zeros = ret.nrows * ret.ncols;
 
-	// GLPK convention: data start at index 1
-	ret.rows = vector<int> (ret.non_zeros+1,0);
-	ret.cols = vector<int> (ret.non_zeros+1,0);
-	ret.values = vector<double> (ret.non_zeros+1,0.);
+		// GLPK convention: data start at index 1
+		ret.rows = vector<int> (ret.non_zeros+1,0);
+		ret.cols = vector<int> (ret.non_zeros+1,0);
+		ret.values = vector<double> (ret.non_zeros+1,0.);
 
-	// convert data
-	for(unsigned i=0; i<ret.nrows; i++) {
-		for(unsigned j=0; j<ret.ncols; j++) {
-			ret.rows.at( ret.ncols*i + j + 1 ) = i+1;
-			ret.cols.at( ret.ncols*i + j + 1 ) = j+1;
-			ret.values.at( ret.ncols*i + j + 1 ) = (double)(matrix.at(i).point.at(j));
-		}
-	}	
+		// convert data
+		for(unsigned i=0; i<ret.nrows; i++) {
+			for(unsigned j=0; j<ret.ncols; j++) {
+				ret.rows.at( ret.ncols*i + j + 1 ) = i+1;
+				ret.cols.at( ret.ncols*i + j + 1 ) = j+1;
+				ret.values.at( ret.ncols*i + j + 1 ) = (double)(matrix.at(i).object.at(j));
+			}
+		}	
+	}
+	else {
+		// save number of rows and columns
+		ret.ncols = matrix.size();
+		ret.nrows = matrix.at(0).size();
 
+		// number of non-zero values
+		ret.non_zeros = ret.nrows * ret.ncols;
+
+		// GLPK convention: data start at index 1
+		ret.rows = vector<int> (ret.non_zeros+1,0);
+		ret.cols = vector<int> (ret.non_zeros+1,0);
+		ret.values = vector<double> (ret.non_zeros+1,0.);
+
+		// convert data
+		for(unsigned i=0; i<ret.nrows; i++) {
+			for(unsigned j=0; j<ret.ncols; j++) {
+				ret.rows.at( ret.ncols*i + j + 1 ) = i+1;
+				ret.cols.at( ret.ncols*i + j + 1 ) = j+1;
+				ret.values.at( ret.ncols*i + j + 1 ) = (double)(matrix.at(j).object.at(i));
+			}
+		}	
+	}
 	return ret;
 }
 
-void print(GLPKFormat& data) {
+void print(const GLPKFormat& data) {
 	// GLPK = 1-based indexing
 	unsigned k=1;
 	for(unsigned i=1; i<=data.nrows; i++) {

@@ -8,7 +8,6 @@
 #include <cassert>
 #include <stdexcept>
 #include <algorithm>
-// #include <eigen3/Eigen/Sparse>
 
 #ifndef UTILITIES_H
 #include "utilities.h"
@@ -147,7 +146,7 @@ public:
 		glp_init_smcp(&_parm);
 	}
 
-	GLPKConvexSeparation(unsigned dimension) {
+	GLPKConvexSeparation(const unsigned dimension) {
 		// setting parameter struct to default values
 		glp_init_smcp(&_parm);
 
@@ -197,7 +196,7 @@ public:
 			_ind.at(i) = i;
 	}
 
-	GLPKConvexSeparation(string cmatrix_file) {
+	GLPKConvexSeparation(const string cmatrix_file) {
 		// reading vertex coordinates and parameters
 		if(read_vertex_matrix(cmatrix_file) != 0) {
 			exit (EXIT_FAILURE);
@@ -208,7 +207,7 @@ public:
 
 	}
 
-	GLPKConvexSeparation(vector<vector<int>>& cmatrix) {
+	GLPKConvexSeparation(const vector<vector<int>>& cmatrix) {
 		// reading vertex coordinates and parameters
 		if(read_vertex_matrix(cmatrix) != 0) {
 			exit (EXIT_FAILURE);
@@ -219,7 +218,7 @@ public:
 
 	}
 
-	GLPKConvexSeparation(vector<LabelledPoint<int>>& cmatrix) {
+	GLPKConvexSeparation(const vector<LabelledState>& cmatrix) {
 		// reading vertex coordinates and parameters
 		if(read_vertex_matrix(cmatrix) != 0) {
 			exit (EXIT_FAILURE);
@@ -329,19 +328,19 @@ public:
 	}
 
 	// input
-	int read_vertex_matrix(string cmatrix_file) {
+	int read_vertex_matrix(const string cmatrix_file) {
 		GLPKFormat data = to_GLPK_format(cmatrix_file);
 		update_problem(data);
 		return 0;
 	}
 
-	int read_vertex_matrix(vector<vector<int>>& cmatrix) {
+	int read_vertex_matrix(const vector<vector<int>>& cmatrix) {
 		GLPKFormat data = to_GLPK_format(cmatrix);
 		update_problem(data);
 		return 0;
 	}
 
-	int read_vertex_matrix(vector<LabelledPoint<int>>& cmatrix) {
+	int read_vertex_matrix(const vector<LabelledState>& cmatrix) {
 		GLPKFormat data = to_GLPK_format(cmatrix);
 		update_problem(data);
 		return 0;
@@ -355,7 +354,7 @@ public:
 
 
 	// operations
-	int check_point(vector<double> &y) {
+	int check_point(const vector<double> &y) {
 		assert(y.size() == _dim);
 			
 		// copying y
@@ -384,7 +383,7 @@ public:
 		return _glp_ret;
 	}
 
-	int check_point(vector<int> &y) {
+	int check_point(const vector<int> &y) {
 		assert(y.size() == _dim);
 			
 		// copying y
@@ -397,8 +396,9 @@ public:
 		glp_set_mat_row(_lp, 1, _dim+1, _ind.data(), _y.data());
 
 		// setting up objective function
-		for(int j=1; j<=_dim+1; j++) 
+		for(int j=1; j<=_dim+1; j++) {
 			glp_set_obj_coef(_lp, j, _y.at(j));
+		}
 
 
 		// changes in the constraint matrix generally invalides the basis factorization
@@ -413,7 +413,7 @@ public:
 		return _glp_ret;
 	}
 
-	double check_family(PointGenerator &y) {
+	double check_family(const PointGenerator &y) {
 		// Note: This function should check for the correct "search direction" first. I.e. it has to identify which endpoint of the curve lies inside the polytope and which one lies outside. This is needed in order to correctly search of the intersection point parameter in the search interval [_lbnd, _ubnd].
 		// Another note: There is certainly a smarter way to do this, too. This method can only handle a curve which starts outside the polytope, ends in the polytope and has only one intersection point with its boundary. That's enough for now, but for more general scenarios, this strategy has to be changed (e.g. starting from one endpoint and approaching the intersection point. As soon as it is passed, start interval division to find the precise location.)
 
@@ -471,7 +471,7 @@ public:
 		return p1m;
 	}
 
-	void delete_point(unsigned number) {
+	void delete_point(const unsigned number) {
 		assert(number < get_nvertices());
 
 		const int nums[] = {0, (int)(number+2)};
@@ -482,7 +482,7 @@ public:
 		_labels.erase(_labels.begin()+number);
 	}
 
-	int delete_redundant_points(unsigned max_loops=1) {
+	int delete_redundant_points(const unsigned max_loops=1) {
 		// Checks the generating set of the polytope for redundant points and deletes them. The remaining set consists of the vertices.
 		//
 		// If the parameter max_loops is given, the elimination procedure is repeated up to max_loops times until the number of points stabilises. This is just for testing purposes, since the algorithm should give the correct set of points after the first run.
@@ -494,6 +494,7 @@ public:
 		unsigned nvertices_init = get_nvertices();
 		unsigned cnt = 0;
 		int ret;
+		unsigned elim_count = 1;
 
 
 		// used to temporarily save the coordinates of a point 
@@ -555,6 +556,8 @@ public:
 					// it is redundant
 					delete_point(point);
 
+					++elim_count;
+
 					// testing
 					// cerr << "Deleted point #" << point << " with objective value " << scientific << get_obj_value() << endl;
 
@@ -562,6 +565,10 @@ public:
 					if(_verbose >= 2){
 						cout << "Deleted point #" << point << endl;
 					}
+				}
+
+				if( (elim_count%1000 == 0) && (_verbose >= 1) ) {
+					cout << "Deleted " << elim_count-1 << " points." << endl;
 				}
 			}
 
@@ -576,10 +583,10 @@ public:
 		}
 
 
-		return 0;
+		return elim_count-1;
 	}
 
-	int add_vertex(vector<double> &v, string label="") {
+	int add_vertex(const vector<double> &v, const string label="") {
 		// returns 0 if vertex was added and 1 otherwise
 
 		// check if vertex is not already in the convex hull
@@ -600,7 +607,7 @@ public:
 			row.at(_dim+1) = -1.;
 
 			// replacing the (i+2)-th row of the constraint matrix
-			glp_set_mat_row(_lp, i+2, _dim+1, _ind.data(), _y.data());
+			glp_set_mat_row(_lp, i+2, _dim+1, _ind.data(), row.data());
 
 			// adding the label
 			_labels.push_back(label);
@@ -612,7 +619,7 @@ public:
 		}
 	}
 
-	int add_vertex(vector<int> &v, string label="") {
+	int add_vertex(const vector<int> &v, const string label="") {
 		// returns 0 if vertex was added and 1 otherwise
 
 		// check if vertex is not already in the convex hull
@@ -632,7 +639,7 @@ public:
 			row.at(_dim+1) = -1.;
 
 			// replacing the (i+2)-th row of the constraint matrix
-			glp_set_mat_row(_lp, i+2, _dim+1, _ind.data(), _y.data());
+			glp_set_mat_row(_lp, i+2, _dim+1, _ind.data(), row.data());
 
 			// adding the label
 			_labels.push_back(label);
@@ -644,7 +651,118 @@ public:
 		}
 	}
 
-	void set_labels(vector<string>& labels) {
+	int add_vertex(const LabelledState& v) {
+
+		// adding a row
+		unsigned i = get_nvertices();
+		string s = "p" + to_string(i+1);
+
+		glp_add_rows(_lp, 1);		
+		glp_set_row_name(_lp, i+2, s.c_str());
+		glp_set_row_bnds(_lp, i+2, GLP_UP, 0.0, 0.0);
+
+		// adding data
+		vector<double> row(_dim+2,0);
+		copy(v.object.begin(), v.object.end(), row.begin()+1);
+		row.at(_dim+1) = -1.;
+
+		// replacing the (i+2)-th row of the constraint matrix
+		glp_set_mat_row(_lp, i+2, _dim+1, _ind.data(), row.data());
+
+		// adding the label
+		_labels.push_back(v.label);
+
+		return 0;
+	}
+
+	// performs Dula-Helgason algorithm to delete redundant points
+	// points have to be inputted in lexicographical order for this to succeed! duplicate points are not allowed!
+	// returns the indices of points that are extremal
+	vector<unsigned> add_vertices(const vector<LabelledState>& points) {
+		assert(points.at(0).size() == get_dimension());
+
+		unsigned N = points.size();
+		unsigned ret;
+		vector<unsigned> idx_list ({0});
+		bool flag;
+
+		vector<double> z;
+		unsigned max_idx;
+		double prod, max_prod;
+
+		// add the lexicographically smallest point
+		add_vertex(points.at(0));
+		
+		for(unsigned i=1; i<N; i++) {
+			// check if the i-th point was already added
+			if( find(idx_list.begin(), idx_list.end(), i) == idx_list.end() ) {
+
+				flag = false;
+
+				// repeat the following as long as the i-th point is not in the interior
+				while( flag == false ) {
+					
+					ret = check_point( points.at(i).object );
+
+					// handle LP status
+					if(ret != 0) {
+						if(_verbose >= 1) {
+							cerr << "Error: LP failed with return value " << ret << " for point #" << i << endl;
+						}
+						break;
+					}
+
+					ret = get_status();
+					if((ret != GLP_FEAS) && (ret != GLP_OPT)) {
+						if(_verbose >= 1) {
+							cerr << "Error: Couldn't find a feasible solution for point #" << i << endl;
+						}
+						break;
+					}
+
+					// check result
+					if(get_obj_value() > 0) {
+						// we found a separating hyperplane, get the normal vector
+						auto x = get_solution();
+						
+						// search for the first point with index j >= i that minimises the inner the inner product with x
+
+						// compute all inner products with x 
+						prod = inner_product( points.at(i).object.begin(), points.at(i).object.end(), x.begin(), 0 );
+						max_prod = prod;
+						max_idx = i;
+
+						for(unsigned j=i+1; j<N; j++) {
+							prod = inner_product( points.at(j).object.begin(), points.at(j).object.end(), x.begin(), 0 );
+
+							if(prod > max_prod && find(idx_list.begin(), idx_list.end(), j) == idx_list.end()) {
+								max_prod = prod;
+								max_idx = j;
+							}
+						}
+
+						// add vertex
+						idx_list.push_back(max_idx);
+						add_vertex(points.at(max_idx));
+
+						if(i == max_idx) {
+							flag = true;
+						}
+
+					} 
+					else {
+						// it is in the convex hull
+						flag = true;
+					}		
+
+				}
+			}	
+		}
+
+		return idx_list;
+	}
+
+	void set_labels(const vector<string>& labels) {
 		assert(labels.size() == get_nvertices());
 		_labels = labels;
 	}
@@ -654,11 +772,18 @@ public:
 		return glp_get_obj_val(_lp);
 	}
 
-	// vector<double> get_opt_solution() {
-	// 	// TBD
-	// }
+	vector<double> get_solution() {
+		// write solution from GLPK object
+		unsigned M = get_dimension()+1;
+		vector<double> sol (M,0);
 
-	vector<double> get_vertex(unsigned i) {
+		for(unsigned i=1; i<=M; i++) {
+			sol.at(i-1) = glp_get_col_prim(_lp, i);
+		}
+		return sol;
+	}
+
+	vector<double> get_vertex(const unsigned i) {
 		// returns a dense vector containing the coordinates of the i-th vertex
 		assert(i < get_nvertices());
 
@@ -679,7 +804,7 @@ public:
 		return v;
 	}
 
-	vector<int> iget_vertex(unsigned i) {
+	vector<int> iget_vertex(const unsigned i) {
 		// returns a dense vector containing the coordinates of the i-th vertex
 		assert(i < get_nvertices());
 
@@ -741,10 +866,10 @@ public:
 		return ret;
 	}
 
-	vector<LabelledPoint<int>> iget_labelled_vertices() {
-		vector<LabelledPoint<int>> ret (get_nvertices());
+	vector<LabelledState> iget_labelled_vertices() {
+		vector<LabelledState> ret (get_nvertices());
 		for(unsigned i=0; i<ret.size(); i++) {
-			ret.at(i).point = iget_vertex(i);
+			ret.at(i).object = iget_vertex(i);
 			ret.at(i).label = _labels.at(i);
 		}
 
@@ -785,11 +910,28 @@ public:
 
 
 	// output methods
-	void write_sol(string outfile) {
-		glp_print_sol(_lp, outfile.c_str());
+	void write_glpk_output(const string outfile) {
+		glp_print_sol(_lp, outfile.c_str());		
 	}
 
-	void write_constraint_matrix(string outfile) {
+	void write_sol(const string outfile) {
+		// write solution from GLPK object
+		ofstream fout (outfile);
+		unsigned M = get_dimension()+1;
+
+		if(fout.is_open()) {
+			for(unsigned i=1; i<=M; i++) {
+				fout << glp_get_col_prim(_lp, i) << endl;
+			}
+			fout.close();
+		}
+		else {
+			cout << "Error in GLPKConvexSeparation::write_sol : Couldn't open file " + outfile + " for writing" << endl;
+		}
+
+	}
+
+	void write_constraint_matrix(const string outfile) {
 		ofstream fout (outfile);
 
 		int *ind = new int[_dim+2];
@@ -817,7 +959,7 @@ public:
 		delete[] val;
 	}
 
-	void write_dense_constraint_matrix(string outfile) {
+	void write_dense_constraint_matrix(const string outfile) {
 		ofstream fout (outfile);
 
 		int *ind = new int[_dim+2];
@@ -857,7 +999,7 @@ public:
 		delete[] val;
 	}
 
-	void write_labels(string outfile) {
+	void write_labels(const string outfile) {
 		ofstream fout (outfile);
 
 		if(fout.is_open()) {
@@ -871,21 +1013,23 @@ public:
 		fout.close();
 	}
 
-	void print_parameters() {
+	void print_parameters(bool all=false) {
 		cout << "---------------------------------------" << endl;
 		cout << "GLPKConvexSeparation parameter output" << endl;
-		cout << "---------------------------------------" << endl;
+		// cout << "---------------------------------------" << endl;
 
 		cout << "Problem parameters:" << endl;
 		cout << "  Dimension: " << get_dimension() << endl;
 		cout << "  Vertices: " << get_nvertices() << endl;
 		cout << "  Non-Zeros in the constraint matrix: " << get_nnz() << endl;
 
-		cout << "Convex seperation parameters:" << endl;
-		cout << "  Precision: " << _precision << endl;
-		cout << "  Maximal iterations: " << _max_iter << endl;
-		cout << "  Lower bound for interval division: " << _lbnd << endl;
-		cout << "  Upper bound for interval division: " << _ubnd << endl;
+		if(all == true) {
+			cout << "Convex seperation parameters:" << endl;
+			cout << "  Precision: " << _precision << endl;
+			cout << "  Maximal iterations: " << _max_iter << endl;
+			cout << "  Lower bound for interval division: " << _lbnd << endl;
+			cout << "  Upper bound for interval division: " << _ubnd << endl;
+		}
 		cout << "---------------------------------------" << endl;
 	}
 };

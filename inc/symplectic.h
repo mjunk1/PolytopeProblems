@@ -32,6 +32,7 @@ using namespace std;
 // type that is used to represent binary vectors in phase space
 // note that for n qubits, the binary vector corresponds to a sequence of 2n bits, so we use by default uint64_t which can represent 64 bits, so works definitely for up to n=32
 typedef uint64_t binvec;
+typedef vector<binvec> symplectic_matrix; 
 
 
 // ----- bit manipulation for operating on binary vectors

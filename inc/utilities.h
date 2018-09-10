@@ -10,6 +10,8 @@
 #include <tuple>
 #include <cblas.h>
 #include <cstdint>
+#include <algorithm>
+#include <numeric>
 
 
 using namespace std;
@@ -26,32 +28,57 @@ using namespace std;
 
 // --- data type for points
 template <class T>
-struct LabelledPoint {
-	vector<T> point;
+struct LabelledObject {
+	T object;
 	string label;
 
-	LabelledPoint(unsigned n) : point(n) {};
-	LabelledPoint() {};
+	LabelledObject() {};
 
-	unsigned size() {
-		return point.size();
+	bool operator<(const LabelledObject<T>& rhs)
+    {
+        return this->object < rhs.object;
+    }
+
+    bool operator==(const LabelledObject<T>& rhs)
+    {
+        return this->object == rhs.object;
+    }
+
+    inline bool operator> (const LabelledObject<T>& rhs){ return rhs < (*this); }
+	inline bool operator<=(const LabelledObject<T>& rhs){ return !((*this) > rhs); }
+	inline bool operator>=(const LabelledObject<T>& rhs){ return !((*this) < rhs); }
+
+};
+
+// --- data type for states
+struct LabelledState : public LabelledObject<vector<int>> {
+
+	LabelledState() {}
+
+	LabelledState(unsigned n) {
+		this->object = vector<int>(n,0);
+	}
+
+	LabelledState(initializer_list<int> list, string lab) {
+		this->object.assign(list);
+		this->label = lab;
+	}
+
+	LabelledState(vector<int> vec, string lab) {
+		this->object = vec;
+		this->label = lab;
+	}
+
+	unsigned size() const {
+		return this->object.size();
 	}
 
 	void clear() {
-		point.assign(point.size(),0);
-		label.clear();
+		this->object.assign(this->object.size(),0);
+		this->label.clear();
 	}
-
-	bool operator<(const LabelledPoint<T>& rhs)
-    {
-        return this->point < rhs.point;
-    }
-
-    inline bool operator> (const LabelledPoint<T>& rhs){ return rhs < (*this); }
-	inline bool operator<=(const LabelledPoint<T>& rhs){ return !((*this) > rhs); }
-	inline bool operator>=(const LabelledPoint<T>& rhs){ return !((*this) < rhs); }
-
 };
+
 
 
 // ----- helpers
@@ -106,20 +133,43 @@ vector<vector<unsigned>> get_partitions(unsigned n) {
 	return ret;
 }
 
+vector<vector<unsigned>> get_partitions_w_permutations(unsigned n, unsigned len) {
+	assert(len >= 1);
 
-// linear algebra
+	if( n == 1 ) {
+		// return the list { (1) }
+		return vector<vector<unsigned>> (1, vector<unsigned>(1,1) );
+	}
 
-// careful! This function applies the transposed matrix A^T to x ...
-// in my case, this is convenient since ColMajor layout is faster
-// vector<double> my_matrix_vector_prod(const vector<double> &A, const vector<double> &x) {
-// 	unsigned N = x.size(); // N = 4^n
-// 	vector<double> y(N,0);
+	if(len == 1) {
+		// return the list { (n) }
+		return vector<vector<unsigned>> (1, vector<unsigned>(n,1) );
+	}
 
-// 	// transform
-// 	cblas_dgemv(CblasColMajor,CblasNoTrans,N,N,1.0,A.data(),N,x.data(),1,0.0,y.data(),1);
+	vector<vector<unsigned>> ret;
+	vector<vector<unsigned>> ret2;
+	
+	for(unsigned k=1; k<n; k++) {
+		ret2 = get_partitions_w_permutations(k, len-1);
+		for(auto p : ret2) {
+			if(p.size() <= len-1) {
+				p.insert(p.begin(), n-k);
+				ret.push_back(p);
+			}
+		}
+	}
 
-// 	return y;
-// }
+	return ret;
+}
+
+double my_inner_product(vector<int> a, vector<double> b) {
+	double ret = 0;
+	for (unsigned i=0; i<a.size(); i++) {
+		ret += a.at(i)*b.at(i);
+	}	
+	return ret;
+}
+
 
 unsigned factorial(const unsigned n) {
 	unsigned f = 1;
@@ -165,7 +215,7 @@ unsigned get_multi_index(const unsigned arr_dim, const unsigned* arr_ranges, con
 	return 0;
 }
 
-unsigned get_multi_index(const std::vector<unsigned> &arr_ranges, const unsigned index, vector<unsigned> &indices) {
+unsigned get_multi_index(const vector<unsigned> &arr_ranges, const unsigned index, vector<unsigned> &indices) {
 	indices.reserve(arr_ranges.size());
 	return get_multi_index(arr_ranges.size(), arr_ranges.data(), index, indices.data());
 }
@@ -286,5 +336,24 @@ int write_pdist(fstream &fout, double *p, unsigned nqubits) {
 	return 0;
 }
 
+
+
+// ----- sorting
+
+// from stackoverflow
+template <typename T, typename Compare>
+vector<size_t> sort_permutation(const vector<T>& vec, Compare& compare) {
+    vector<size_t> p(vec.size());
+    iota(p.begin(), p.end(), 0);
+    sort(p.begin(), p.end(), [&](size_t i, size_t j){ return compare(vec[i], vec[j]); });
+    return p;
+}
+
+template <typename T>
+vector<T> apply_permutation(const vector<T>& vec, const vector<size_t>& p) {
+    vector<T> sorted_vec(vec.size());
+    transform(p.begin(), p.end(), sorted_vec.begin(), [&](size_t i){ return vec[i]; });
+    return sorted_vec;
+}
 
 #endif

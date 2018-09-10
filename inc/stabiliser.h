@@ -11,6 +11,7 @@
 #include <utility>
 #include <cstdio>
 #include <sstream>
+#include <functional>
 
 #ifndef SYMPLECTIC_H
 #include "symplectic.h"
@@ -20,8 +21,6 @@
 #include "GLPKConvexSeparation.h"
 #endif
 
-// --- data type for points
-typedef LabelledPoint<int> LabelledState;
 
 
 
@@ -196,6 +195,29 @@ vector<unsigned> index_set2(const unsigned kk, const unsigned k, const unsigned 
 	return iset0;
 }
 
+// computes purity of state in Fock basis, with identity component omitted
+// this is not the actual purity, since we multiplied it with an overall 2^(-n) for numerical reasons
+double purity(const vector<int>& state) {
+	unsigned n = state.size();
+	double ret = 1.;
+	for(unsigned k=0; k<n; k++) {
+		ret += (double)state.at(k) * (double)state.at(k) / ( pow(2., k+1) * (double)binomial_coeff(n,k+1) );
+	}
+	return ret;
+}
+
+double purity(const LabelledState& state) {
+	return purity(state.object);
+}
+
+bool compare_by_purity(const vector<int>& state1, const vector<int>& state2) {
+	return purity(state1) > purity(state2);
+}
+
+bool compare_by_purity2(const LabelledState& state1, const LabelledState& state2) {
+	return purity(state1.object) > purity(state2.object);
+}
+
 // -----------------------------------
 // ---- Magic state representation
 // -----------------------------------
@@ -242,6 +264,14 @@ vector<double> H_state_nb(const unsigned n, const double p = 0) {
 	return ret;
 }
 
+vector<double> T_state_nb(const unsigned n, const double p = 0) {
+	vector<double> ret (n);
+	for(unsigned k=1; k<n+1; k++) {
+		ret.at(k-1) = (1-p)*pow(sqrt(3),k)*binomial_coeff(n,k);
+	}
+	return ret;
+}
+
 class ProjectedNoisyHState: public PointGenerator {
 protected:
 	unsigned _n;
@@ -251,7 +281,7 @@ public:
 		_n = n;
 	}
 
-	vector<double> operator() (double p) {
+	vector<double> operator() (double p) const  {
 		return H_state_nb(_n,p);
 	}
 
@@ -266,7 +296,7 @@ public:
 		_n = n;
 	}
 
-	vector<double> operator() (double p) {
+	vector<double> operator() (double p) const {
 		return H_state(_n,p);
 	}
 
@@ -553,7 +583,7 @@ int write_states(const vector<LabelledState> &states, string states_file, string
 
 	if(fout.is_open()) {
 		for(unsigned i=0; i<nstates; i++) {
-			for(auto c : states.at(i).point) {
+			for(auto c : states.at(i).object) {
 				fout << c << " ";
 			}
 			fout << endl;
@@ -581,6 +611,34 @@ int write_states(const vector<LabelledState> &states, string states_file, string
 	return 0;
 }
 
+int write_con_states(const vector<LabelledState> &states, string states_file, string labels_file) {
+	// write the states
+	fstream fout(states_file, ios::out);
+	fstream fout2(labels_file, ios::out);
+	unsigned nstates = states.size();
+
+	if(fout.is_open() && fout2.is_open()) {
+		for(unsigned i=0; i<nstates; i++) {
+			if(states.at(i).label.back() == 'c') {
+				fout2 << states.at(i).label << endl;
+
+				for(auto c : states.at(i).object) {
+					fout << c << " ";
+				}
+				fout << endl;
+			}
+		}	
+		fout.close();
+		fout2.close();
+	}
+	else {
+		cout << "Error in write_states : Couldn't open file " + states_file + " for writing" << endl;
+		return 1;
+	}
+
+	return 0;
+}
+
 int get_states(vector<LabelledState> &states, string states_file, string labels_file="") {
 	unsigned nstates = get_number_of_lines(states_file);
 	
@@ -595,7 +653,7 @@ int get_states(vector<LabelledState> &states, string states_file, string labels_
 			string buf;
 
 			while(sl >> buf) {
-				states.at(i).point.push_back(stoi(buf));
+				states.at(i).object.push_back(stoi(buf));
 			}
 
 			++i;
@@ -628,235 +686,80 @@ int get_states(vector<LabelledState> &states, string states_file, string labels_
 	return 0;
 }
 
+
+// ---- LC coset generators
+
+// representatives of the left cosets Sp(2,Z_2)/S (where S is the symplectic representation of the phase gate, S = (11,01))
+vector<LabelledObject<symplectic_matrix>> S_cosets(unsigned n) {
+	unsigned M = pow(3,n);
+
+	vector<vector<binvec>> local_cosets = { vector<binvec>({0b10,0b01}), vector<binvec>({0b01,0b10}), vector<binvec>({0b01,0b11}) };
+	vector<LabelledObject<symplectic_matrix>> LC_cosets (M);
+	vector<vector<binvec>> Slist (n);
+
+	vector<unsigned> trits(n, 0);
+	for(binvec i=0; i<M; i++) {
+		get_multi_index(n, 3, i, trits);		
+		for(unsigned j=0; j<n; j++) {
+			Slist.at(j) = local_cosets.at(trits.at(j));
+			LC_cosets.at(i).label += to_string(trits.at(j));
+		}
+		LC_cosets.at(i).object = direct_sum(Slist);
+	}
+
+	return LC_cosets;
+}
+
+// representatives of the left cosets Sp(2,Z_2)/SH (where SH is the symplectic representation of the phase gate x Hadamard, SH = (11,10))
+vector<LabelledObject<symplectic_matrix>> SH_cosets(unsigned n) {
+	unsigned N = pow(2,n);
+
+	vector<vector<binvec>> local_cosets = { vector<binvec>({0b10,0b01}), vector<binvec>({0b11,0b01}) };
+	vector<LabelledObject<symplectic_matrix>> LC_cosets (N);
+	vector<vector<binvec>> Slist (n);
+
+	for(binvec i=0; i<N; i++) {
+		for(unsigned j=0; j<n; j++) {
+			Slist.at(j) = local_cosets.at( get_bit(i,j,n) );
+		}
+		LC_cosets.at(i).object = direct_sum(Slist);
+		LC_cosets.at(i).label = write_bits(i,n);
+	}
+
+	return LC_cosets;
+}
+
+vector<LabelledObject<symplectic_matrix>> local_symplectic_group(unsigned n) {
+	unsigned M = pow(6,n);
+
+	vector<symplectic_matrix> local_cosets = { symplectic_matrix({0b10,0b01}), symplectic_matrix({0b01,0b10}), symplectic_matrix({0b11,0b01}), symplectic_matrix({0b01,0b11}), symplectic_matrix({0b11,0b10}), symplectic_matrix({0b10,0b11}) };
+	vector<LabelledObject<symplectic_matrix>> LC_cosets (M);
+	vector<symplectic_matrix> Slist (n);
+
+	vector<unsigned> dits(n, 0);
+	for(binvec i=0; i<M; i++) {
+		get_multi_index(n, 6, i, dits);		
+		for(unsigned j=0; j<n; j++) {
+			Slist.at(j) = local_cosets.at(dits.at(j));
+			LC_cosets.at(i).label += to_string(dits.at(j));
+		}
+		LC_cosets.at(i).object = direct_sum(Slist);
+	}
+
+	return LC_cosets;
+}
+
 // ---- projections
-
-
-vector<double> project_state(const vector<double> &state, const unsigned n) {
-	// size
-	vector<double> pr_state(n, 0.); // 0th component is ommited since it is forced to be 1 
-
-	// project
-	for(unsigned k=1; k<=n; k++) {
-		// average over all components that correspond to k X or Y operators in total
-		// here we loop over the number of Y's
-		for(unsigned kk=0; kk<=k; kk++) {
-			vector<unsigned> aset = index_set2(kk,k,n);
-
-			for(auto a : aset) {
-				pr_state.at(k-1) += state.at(a);
-			}
-		}
-		// normalise
-		// pr_state.at(k-1) /= pow(sqrt(2),k);
-	}
-
-	return pr_state;
-}
-
-vector<double> project_state(const vector<binvec> &B, const binvec s) {
-	// --- variables
-	unsigned n = B.size();
-	vector<double> pr_state (n,0.); // 0th component is ommited since it is forced to be 1 
-	vector<binvec> avec (n,0);
-	vector<unsigned> weights (4,0);
-	unsigned phase, k;
-	binvec aa;
-
-	// --- loop over all points a in the Lagrangian (except 0)
-	for(binvec a=1; a<pow(2,n); a++) {
-		aa = 0;
-
-		// ----- determine the Fock component the Pauli component contributes to 
-
-		// get coordinates w.r.t. the canonical basis
-		for(unsigned i=0; i<n; i++) {
-			avec.at(i) = get_bit(a,i,n) * B.at(i);
-			aa ^= avec.at(i); 
-		}
-
-		// Compute the weights. Only points with zero Z weight have to be considered
-		weights = count_weights(aa,n);
-		if(weights.at(2) == 0) {
-			// determine the Fock component to which the Pauli component conributes to
-			k = weights.at(1) + weights.at(3);
-			if(k > 0) {
-				// compute Pauli component of the state corresponding to a, this is just given by a phase
-
-				// compute the "Lagrangian" phase phi which is i^phi with phi=0,2,4,...
-				// we will write it as i^phi = (-1)^(phi/2)
-				phase = phi(avec,n); 
-				phase /= 2; 
-
-				// explicit stabiliser phase which is inner product of a and s 
-				phase += parity(a&s); 
-
-				// add it to the k-th component
-				pr_state.at(k-1) += pow(-1,phase);
-			}
-		}
-
-	}
-
-	return pr_state;
-}
-
 
 struct proj_helper {
 	binvec a;
-	char fock_index;
+	unsigned fock_index;
 	char pauli_component;
 
-	proj_helper(binvec aa, char f, char p) : a(aa), fock_index(f), pauli_component(p) {
+	proj_helper(binvec aa, unsigned f, char p) : a(aa), fock_index(f), pauli_component(p) {
 	}
 };
 
-
-// This tries to minimise the number of Hadmards
-int pr_stabiliser_from_graphs(const string file, vector<vector<int>> &states, vector<string> &labels) {
-
-	// open the file
-	fstream fin(file, ios::in);
-
-	vector<string> graphs;
-	string row;
-
-	if(fin.is_open()) {
-		while(fin >> row) {
-			graphs.push_back(row);
-		}
-	} 
-	else {
-		cout << "Couldn't open file " << file << endl;
-		return 1;
-	}
-	fin.close();
-
-	// get number of qubits
-	unsigned n = get_order( graphs.at(0) );
-	unsigned graph_len = graphs.size();
-
-	// outer loop variables
-	unsigned N = pow(2,n);
-	states.reserve(pow(3,n)); // estimated size
-	vector<binvec> B (n);
-	vector<binvec> SB (n);
-
-	// identifies of the projected states. labels the orbits
-	labels.reserve(pow(3,n));
-
-	// inner Lagrangian loop variables
-	vector<int> pr_state (n,0.); // 0th component is ommited since it is forced to be 1 
-	vector<proj_helper> Lagrangian_data;
-	Lagrangian_data.reserve(N/2);
-	vector<binvec> avec (n,0);
-	vector<unsigned> weights (4,0);
-	int phase;
-	binvec aa;
-
-	// representatives of the left cosets Sp(2,Z_2)/S (where S is the symplectic representation of the phase gate, S = (11,01))
-	// note that it is sufficent to only consider Hadamard gates
-	vector<vector<binvec>> cosets = { vector<binvec>({0b10,0b01}), vector<binvec>({0b01,0b10}) };
-
-	vector<vector<binvec>> LC_cosets (N);
-	vector<vector<binvec>> Slist (n);
-	// Changed convention here: the bits of i encode wether a Hadamard is applied to the qubits; if the j-th bit from the right is 1, apply a Hadamard to the j-th qubit
-	// Formerly: j-th bit from the left
-	// This simplifies the reduced Hadamard loop, where Hadamards are only applied to the first r qubits
-	for(binvec i=0; i<N; i++) {
-		for(unsigned j=0; j<n; j++) {
-			Slist.at(j) = cosets.at(get_bit2(i, j));
-		}
-		LC_cosets.at(i) = direct_sum(Slist);
-	}
-	// Note: This whole matrix thing can be replaced with bit manipulation
-
-	// graph state loop
-	int dist = 0;
-	binvec b = 0;
-	vector<binvec> A;
-
-	cout << "  Compute projected stabiliser states for graph" << endl;
-
-	// here, we take the Hadamard loop as outer loop to minimise the number of Hadamards.
-
-	for(binvec h=0; h<N; h++) {
-
-		// cout << "\r    #" << g << " / " << graph_len << flush;
-
-		for(unsigned g=0; g<graph_len; g++) {
-			
-			A = graph6_to_adj_mat( graphs.at(g) );
-			B = graph_Lagrangian(A,n);
-
-			// we have to take the local Hadamard orbit of that graph
-
-			for(unsigned k=0; k<n; k++) {
-				SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h), B.at(k));
-			}		
-
-			// loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
-
-			Lagrangian_data.clear();
-			for(binvec a=1; a<N; a++) {
-				aa = 0;
-
-				// get coordinates w.r.t. the canonical basis
-				for(unsigned i=0; i<n; i++) {
-					avec.at(i) = get_bit(a,i,n) * SB.at(i);
-					aa ^= avec.at(i); 
-				}
-
-				// Compute the weights. Only points with zero Z weight have to be considered
-				weights = count_weights(aa,n);
-
-				if(weights.at(2) == 0) {
-					// compute Pauli component of the state corresponding to a, this is just given by a phase
-
-					// compute the "Lagrangian" phase phi which is i^phi with phi=0,2,4,...
-					// we will write it as i^phi = (-1)^(phi/2)
-					phase = phi(avec,n); 
-					phase /= 2; 
-
-					// save for later
-					Lagrangian_data.push_back(proj_helper(a, (char)(weights.at(1)+weights.at(3)), (char)pow(-1,phase)));				
-				}
-			}
-
-			// --- now, loop over phases and use the Lagrangian data computed before
-			for(binvec s=0; s<N; s++) {
-				// clear pr_state
-				pr_state.assign(n,0);
-
-				// note that this loop will only involve non-trivial components
-				for(binvec i=0; i<Lagrangian_data.size(); i++) {
-
-					// explicit stabiliser phase which is inner product of a and s 
-					phase = parity(Lagrangian_data.at(i).a & s); 
-
-					// add it to the right Fock component
-					pr_state.at(Lagrangian_data.at(i).fock_index - 1) += ( pow(-1,phase) * Lagrangian_data.at(i).pauli_component );		
-				}
-
-				// check if projected state pr_state already exists
-				// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than pr_state
-				auto it = lower_bound(states.begin(), states.end(), pr_state);
-				if(it == states.end() || pr_state < *it) {
-					// element was not redundant, so also add it to the list
-					dist = distance(states.begin(),it);
-					states.insert(it, pr_state);
-
-					// add a label
-					labels.insert(labels.begin()+dist, graphs.at(g)+" "+write_bits(invert_bits(h,n),n)+" 0 "+write_bits(s,n));
-				}
-				// note that procedures preserves the ordering in states ... 
-			}
-		}
-	}
-
-	cout << endl;
-
-	return 0;
-}
 
 // ---- routines that rely on connectedness
 
@@ -865,7 +768,7 @@ int pr_stabiliser_from_graphs(const string file, vector<vector<int>> &states, ve
 //  2. W.r.t. to the signs of the n generators
 //
 // The cosets are represented by {I,H,HS} and S can be effectively implemented by switching the representative diagonal entry of the adjacency matrix of the graph from 0 to 1.
-int pr_stabiliser_from_LCgraphs(const string file, vector<vector<int>> &states, vector<string> &labels) {
+int projected_states_H(const string file, vector<vector<int>> &states, vector<string> &labels) {
 	
 	// open the file
 	fstream fin(file, ios::in);
@@ -892,12 +795,12 @@ int pr_stabiliser_from_LCgraphs(const string file, vector<vector<int>> &states, 
 	// outer loop variables
 	unsigned N = pow(2,n);
 	unsigned M = pow(3,n);
-	states.reserve(M); // estimated size
+	states.reserve(graph_len*M); // estimated size
 	vector<binvec> B (n);
 	vector<binvec> SB (n);
 
 	// identifies of the projected states. labels the orbits
-	labels.reserve(M);
+	labels.reserve(graph_len*M);
 
 	// inner Lagrangian loop variables
 	vector<int> pr_state (n,0); // 0th component is ommited since it is forced to be 1 
@@ -965,7 +868,7 @@ int pr_stabiliser_from_LCgraphs(const string file, vector<vector<int>> &states, 
 					phase /= 2; 
 
 					// save for later
-					Lagrangian_data.push_back(proj_helper(a, (char)(weights.at(1)+weights.at(3)), (char)pow(-1,phase)));				
+					Lagrangian_data.push_back(proj_helper(a, (weights.at(1)+weights.at(3)), (char)pow(-1,phase)));				
 				}
 			}
 
@@ -994,7 +897,7 @@ int pr_stabiliser_from_LCgraphs(const string file, vector<vector<int>> &states, 
 					states.insert(it, pr_state);
 
 					// add a label
-					labels.insert(labels.begin()+dist, graphs.at(g)+" "+write_trits(h,n)+" "+write_bits(s,n));
+					labels.insert(labels.begin()+dist, graphs.at(g)+" "+write_trits(h,n)+" "+write_bits(s,n)+" c");
 				}
 				// note that procedures preserves the ordering in states ... 
 			}
@@ -1006,7 +909,7 @@ int pr_stabiliser_from_LCgraphs(const string file, vector<vector<int>> &states, 
 	return 0;
 }
 
-int pr_stabiliser_from_LCgraphs(const string file, vector<LabelledState> &states) {
+int projected_states_H(const string file, vector<LabelledState> &states) {
 	
 	// open the file
 	fstream fin(file, ios::in);
@@ -1049,20 +952,7 @@ int pr_stabiliser_from_LCgraphs(const string file, vector<LabelledState> &states
 	int phase;
 	binvec aa;
 
-	// representatives of the left cosets Sp(2,Z_2)/S (where S is the symplectic representation of the phase gate, S = (11,01))
-	vector<vector<binvec>> cosets = { vector<binvec>({0b10,0b01}), vector<binvec>({0b01,0b10}), vector<binvec>({0b01,0b11}) };
-
-	vector<vector<binvec>> LC_cosets (M);
-	vector<vector<binvec>> Slist (n);
-
-	vector<unsigned> trits(n, 0);
-	for(binvec i=0; i<M; i++) {
-		get_multi_index(n, 3, i, trits);		
-		for(unsigned j=0; j<n; j++) {
-			Slist.at(j) = cosets.at(trits.at(j));
-		}
-		LC_cosets.at(i) = direct_sum(Slist);
-	}
+	auto LC_cosets = S_cosets(n);
 
 	// graph state loop
 	cout << "  Compute projected stabiliser states for graph" << endl;
@@ -1076,7 +966,7 @@ int pr_stabiliser_from_LCgraphs(const string file, vector<LabelledState> &states
 		for(binvec h=0; h<M; h++) {
 
 			for(unsigned k=0; k<n; k++) {
-				SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h), B.at(k));
+				SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h).object, B.at(k));
 			}
 
 			// loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
@@ -1103,7 +993,7 @@ int pr_stabiliser_from_LCgraphs(const string file, vector<LabelledState> &states
 					phase /= 2; 
 
 					// save for later
-					Lagrangian_data.push_back(proj_helper(a, (char)(weights.at(1)+weights.at(3)), (char)pow(-1,phase)));				
+					Lagrangian_data.push_back(proj_helper(a, (weights.at(1)+weights.at(3)), (char)pow(-1,phase)));				
 				}
 			}
 
@@ -1120,11 +1010,264 @@ int pr_stabiliser_from_LCgraphs(const string file, vector<LabelledState> &states
 
 					// add it to the right Fock component
 					// cout << (unsigned)Lagrangian_data.at(i).fock_index << endl;
-					pr_state.point.at(Lagrangian_data.at(i).fock_index - 1) += ( pow(-1,phase) * Lagrangian_data.at(i).pauli_component );		
+					pr_state.object.at(Lagrangian_data.at(i).fock_index - 1) += ( pow(-1,phase) * Lagrangian_data.at(i).pauli_component );		
 				}
 
 				// add a label
-				pr_state.label = graphs.at(g)+" "+write_trits(h,n)+" "+write_bits(s,n);
+				pr_state.label = graphs.at(g)+" "+LC_cosets.at(h).label+" "+write_bits(s,n)+" c";
+
+				// check if projected state pr_state already exists
+				// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than pr_state
+				// note that LabelledState has an overloaded < operator
+				auto it = lower_bound(states.begin(), states.end(), pr_state);
+
+				if(it == states.end() || pr_state < *it) {
+					// element was not redundant, so add it to the list
+					states.insert(it, pr_state);
+				}
+				// note that procedures preserves the ordering in states ... 
+			}
+		}
+	}
+
+	cout << endl;
+
+	states.shrink_to_fit();
+
+	return 0;
+}
+
+int projected_states_T(const string file, vector<LabelledState> &states) {
+	
+	// open the file
+	fstream fin(file, ios::in);
+
+	vector<string> graphs;
+	string row;
+
+	if(fin.is_open()) {
+		while(fin >> row) {
+			graphs.push_back(row);
+		}
+	} 
+	else {
+		cout << "Couldn't open file " << file << endl;
+		return 1;
+	}
+
+	fin.close();
+
+	// get number of qubits
+	unsigned n = get_order( graphs.at(0) );
+	unsigned graph_len = graphs.size();
+
+	// outer loop variables
+	unsigned N = pow(2,n);
+	states.reserve(N); // estimated size
+	vector<binvec> B (n);
+	vector<binvec> SB (n);
+
+	// identifies of the projected states. labels the orbits
+	// labels.reserve(M);
+
+	// inner Lagrangian loop variables
+	LabelledState pr_state (n); // 0th component is ommited since it is forced to be 1 
+	vector<proj_helper> Lagrangian_data;
+	Lagrangian_data.reserve(N/2);
+	vector<binvec> avec (n,0);
+	vector<unsigned> weights (4,0);
+	int phase;
+	binvec aa;
+
+	auto LC_cosets = SH_cosets(n);
+
+	// graph state loop
+	cout << "  Compute projected stabiliser states for graph" << endl;
+
+	for(unsigned g=0; g<graph_len; g++) {
+
+		cout << "\r    #" << g+1 << " / " << graph_len << flush;
+		B = graph_Lagrangian( graph6_to_adj_mat( graphs.at(g) ),n);
+
+		// we have to take the local coset orbit of that Lagrangian
+		for(binvec h=0; h<N; h++) {
+
+			for(unsigned k=0; k<n; k++) {
+				SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h).object, B.at(k));
+			}
+
+			// loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
+
+			Lagrangian_data.clear();
+			for(binvec a=1; a<N; a++) {
+				aa = 0;
+
+				// get coordinates w.r.t. the canonical basis
+				for(unsigned i=0; i<n; i++) {
+					avec.at(i) = get_bit(a,i,n) * SB.at(i);
+					aa ^= avec.at(i); 
+				}
+
+				// Compute the weights. 
+				weights = count_weights(aa,n);
+
+				// compute Pauli component of the state corresponding to a, this is just given by a phase
+
+				// compute the "Lagrangian" phase phi which is i^phi with phi=0,2,4,...
+				// we will write it as i^phi = (-1)^(phi/2)
+				phase = phi(avec,n); 
+				phase /= 2; 
+
+				// save for later
+				Lagrangian_data.push_back(proj_helper(a, (weights.at(1)+weights.at(2)+weights.at(3)), (char)pow(-1,phase)));				
+			}
+
+			// --- now, loop over phases and use the Lagrangian data computed before
+			for(binvec s=0; s<N; s++) {
+				// clear pr_state
+				pr_state.clear();
+
+				// note that this loop will only involve non-trivial components
+				for(binvec i=0; i<Lagrangian_data.size(); i++) {
+
+					// explicit stabiliser phase which is inner product of a and s 
+					phase = parity(Lagrangian_data.at(i).a & s); 
+
+					// add it to the right Fock component
+					// cout << (unsigned)Lagrangian_data.at(i).fock_index << endl;
+					pr_state.object.at(Lagrangian_data.at(i).fock_index - 1) += ( pow(-1,phase) * Lagrangian_data.at(i).pauli_component );		
+				}
+
+				// add a label
+				pr_state.label = graphs.at(g)+" "+LC_cosets.at(h).label+" "+write_bits(s,n)+" c";
+
+				// check if projected state pr_state already exists
+				// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than pr_state
+				// note that LabelledState has an overloaded < operator
+				auto it = lower_bound(states.begin(), states.end(), pr_state);
+
+				if(it == states.end() || pr_state < *it) {
+					// element was not redundant, so add it to the list
+					states.insert(it, pr_state);
+				}
+				// note that procedures preserves the ordering in states ... 
+			}
+		}
+	}
+
+	cout << endl;
+
+	return 0;
+}
+
+int projected_states_Sn(const string file, vector<LabelledState> &states) {
+	
+	// open the file
+	fstream fin(file, ios::in);
+
+	vector<string> graphs;
+	string row;
+
+	if(fin.is_open()) {
+		while(fin >> row) {
+			graphs.push_back(row);
+		}
+	} 
+	else {
+		cout << "Couldn't open file " << file << endl;
+		return 1;
+	}
+
+	fin.close();
+
+	// get number of qubits
+	unsigned n = get_order( graphs.at(0) );
+	unsigned graph_len = graphs.size();
+
+	// outer loop variables
+	unsigned N = pow(2,n);
+	unsigned M = pow(6,n);
+	states.reserve(M); // estimated size
+	vector<binvec> B (n);
+	vector<binvec> SB (n);
+
+	// identifies of the projected states. labels the orbits
+	// labels.reserve(M);
+
+	// inner Lagrangian loop variables
+	LabelledState pr_state (pow(n+1,3));
+	vector<proj_helper> Lagrangian_data;
+	Lagrangian_data.reserve(N/2);
+	vector<binvec> avec (n,0);
+	vector<unsigned> weights (4,0);
+	unsigned basis_index = 0;
+	int phase;
+	binvec aa;
+
+	// get cosets
+	auto LC_cosets = local_symplectic_group(n);
+	unsigned coset_size = LC_cosets.size();
+
+	// graph state loop
+	cout << "  Compute projected stabiliser states for graph" << endl;
+
+	for(unsigned g=0; g<graph_len; g++) {
+
+		cout << "\r    #" << g+1 << " / " << graph_len << flush;
+		B = graph_Lagrangian( graph6_to_adj_mat( graphs.at(g) ),n);
+
+		// we have to take the local coset orbit of that Lagrangian
+		for(binvec h=0; h<coset_size; h++) {
+
+			for(unsigned k=0; k<n; k++) {
+				SB.at(k) = matrix_vector_prod_mod2(LC_cosets.at(h).object, B.at(k));
+			}
+
+			// loop over all points a in the Lagrangian SB (except 0) and fill the vector Lagrangian_data
+
+			Lagrangian_data.clear();
+			for(binvec a=1; a<N; a++) {
+				aa = 0;
+
+				// get coordinates w.r.t. the canonical basis
+				for(unsigned i=0; i<n; i++) {
+					avec.at(i) = get_bit(a,i,n) * SB.at(i);
+					aa ^= avec.at(i); 
+				}
+
+				// Compute the weights and transform them into an index
+				weights = count_weights(aa,n);
+				basis_index = get_linear_index(3, n+1, weights.data()+1);
+
+				// compute Pauli component of the state corresponding to a, this is just given by a phase
+
+				// compute the "Lagrangian" phase phi which is i^phi with phi=0,2,4,...
+				// we will write it as i^phi = (-1)^(phi/2)
+				phase = phi(avec,n); 
+				phase /= 2; 
+
+				// save for later
+				Lagrangian_data.push_back(proj_helper(a, basis_index, (char)pow(-1,phase)));				
+			}
+
+			// --- now, loop over phases and use the Lagrangian data computed before
+			for(binvec s=0; s<N; s++) {
+				// clear pr_state
+				pr_state.clear();
+
+				// note that this loop will only involve non-trivial components
+				for(binvec i=0; i<Lagrangian_data.size(); i++) {
+
+					// explicit stabiliser phase which is inner product of a and s 
+					phase = parity(Lagrangian_data.at(i).a & s); 
+
+					// add it to the right Fock component
+					// cout << Lagrangian_data.at(i).fock_index << endl;
+					pr_state.object.at(Lagrangian_data.at(i).fock_index) += ( pow(-1,phase) * Lagrangian_data.at(i).pauli_component );		
+				}
+
+				// add a label
+				pr_state.label = graphs.at(g)+" "+LC_cosets.at(h).label+" "+write_bits(s,n)+" c";
 
 				// check if projected state pr_state already exists
 				// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than pr_state
@@ -1153,9 +1296,16 @@ int pr_stabiliser_from_LCgraphs(const string file, vector<LabelledState> &states
 
 // the coordinates of the projection of product state \rho \otimes \sigma can be expressed by their individual projections only. If A_k(.) denotes the k-th coordinate, i.e. the k-th signed XY weight enumerator, then
 // A_k( \rho\otimes\sigma ) = \sum_{i=0}^k A_i(\rho) A_{k-i}(\sigma).
-vector<int> pr_product_state(vector<int> rho, vector<int> sigma) {
+vector<int> pr_product_state(const vector<int>& rho, const vector<int>& sigma) {
 	unsigned n = rho.size();
 	unsigned m = sigma.size();
+
+	if(n == 0) {
+		return sigma;
+	}
+	if(m == 0) {
+		return rho;
+	}
 
 	vector<int> ret (n+m,0);
 	vector<int> r (n+m+1,0);
@@ -1176,7 +1326,14 @@ vector<int> pr_product_state(vector<int> rho, vector<int> sigma) {
 	return ret;
 }
 
-string pr_product_label(string label1, string label2) {
+string pr_product_label(const string label1, const string label2) {
+	if(label1.empty() || label1 == "") {
+		return label2;
+	}
+	if(label2.empty() || label2 == "") {
+		return label1;
+	}
+
 	// get the components of every label 
 	vector<string> c1;
 	vector<string> c2;
@@ -1203,11 +1360,12 @@ string pr_product_label(string label1, string label2) {
 	// concatenate the operator and sign encoding
 	ret += " "+c1.at(1)+c2.at(1);
 	ret += " "+c1.at(2)+c2.at(2);
+	ret += " d"; // for disconnected
 
 	return ret;
 }
 
-LabelledState pr_product_state(LabelledState rho, LabelledState sigma) {
+LabelledState pr_product_state(const LabelledState& rho, const LabelledState& sigma) {
 	unsigned n = rho.size();
 	unsigned m = sigma.size();
 
@@ -1216,14 +1374,67 @@ LabelledState pr_product_state(LabelledState rho, LabelledState sigma) {
 	vector<int> s (n+m+1,0);
 
 	// copy rho and sigma to r and s which are padded with zeros, to avoid headaches and bugs ;)
-	copy(rho.point.begin(),rho.point.end(),r.begin()+1);
-	copy(sigma.point.begin(),sigma.point.end(),s.begin()+1);
+	copy(rho.object.begin(),rho.object.end(),r.begin()+1);
+	copy(sigma.object.begin(),sigma.object.end(),s.begin()+1);
 	r.at(0) = 1;
 	s.at(0) = 1;
 
 	for(unsigned k=1; k<=n+m; k++) {	
 		for(unsigned i=0; i<=k; i++) {
-			ret.point.at(k-1) += r.at(i)*s.at(k-i);
+			ret.object.at(k-1) += r.at(i)*s.at(k-i);
+		}
+	}
+
+	ret.label = pr_product_label(rho.label, sigma.label);
+
+	return ret;
+}
+
+LabelledState symmetrised_product_state(const LabelledState& rho, const LabelledState& sigma) {
+	unsigned n = (unsigned)cbrt(rho.size()) - 1;
+	unsigned m = (unsigned)cbrt(sigma.size()) - 1;
+	unsigned N = n+m;
+	unsigned len = pow(N+1,3);
+	LabelledState ret ( len );
+	int temp;
+
+	vector<unsigned> indices (3,0);
+	unsigned retindex = 0;
+	unsigned rhoindex = 0;
+	unsigned sigmaindex = 0;
+
+	for(unsigned k1=0; k1<=N; k1++) {	
+		for(unsigned k2=0; k2<=N-k1; k2++) {
+			for(unsigned k3=0; k3<=N-k1-k2; k3++) {
+				indices.at(0) = k1;
+				indices.at(1) = k2;
+				indices.at(2) = k3;
+				retindex = get_linear_index(3, N+1, indices.data());
+
+				for(unsigned j1=0; j1<=k1; j1++) {	
+					for(unsigned j2=0; j2<=k2; j2++) {
+						for(unsigned j3=0; j3<=k3; j3++) {
+							temp = 1;
+
+							if(j1 <= n && j2 <= n && j3 <= n && (k1-j1) <= m && (k2-j2) <= m && (k3-j3) <= m) {
+								indices.at(0) = j1;
+								indices.at(1) = j2;
+								indices.at(2) = j3;
+								rhoindex = get_linear_index(3, n+1, indices.data());
+								temp *= rho.object.at(rhoindex);
+
+								indices.at(0) = k1-j1;
+								indices.at(1) = k2-j2;
+								indices.at(2) = k3-j3;
+								sigmaindex = get_linear_index(3, m+1, indices.data());
+								temp *= sigma.object.at(sigmaindex);
+
+								ret.object.at(retindex) += temp;
+							}	
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -1341,21 +1552,14 @@ int pr_product_states(unsigned n, vector<LabelledState> &states, string states_f
 
 		snprintf(fstate, 2*states_file_tpl.size(), states_file_tpl.c_str(), i+1);
 
-		if(get_states(vertices.at(i), string(fstate)) != 0) {
-			return 1;
-		}
-
 		if(labels_file_tpl != "") {
 			snprintf(flabel, 2*labels_file_tpl.size(), labels_file_tpl.c_str(), i+1);
-			snprintf(fstate, 2*states_file_tpl.size(), states_file_tpl.c_str(), i+1);
 
 			if(get_states(vertices.at(i), string(fstate), string(flabel)) != 0) {
 				return 1;
 			}
 		}
 		else {
-			snprintf(fstate, 2*states_file_tpl.size(), states_file_tpl.c_str(), i+1);
-
 			if(get_states(vertices.at(i), string(fstate)) != 0) {
 				return 1;
 			}
@@ -1406,6 +1610,227 @@ int pr_product_states(unsigned n, vector<LabelledState> &states, string states_f
 
 	return 0;
 }
+
+int pr_product_states(unsigned n, unsigned max_factor, vector<LabelledState> &states, string states_file_tpl, string labels_file_tpl="") {
+
+	//  get partitions of n
+	auto partitions = get_partitions(n);
+
+	// clear containers
+	states.clear();
+
+	// read vertices 
+	vector<vector<LabelledState>> vertices (max_factor);
+	vector<unsigned> nvertices (max_factor);
+
+	for(unsigned i=0; i<max_factor; i++) {
+		char *fstate = new char [2*states_file_tpl.size()];
+		char *flabel = new char [2*labels_file_tpl.size()];
+
+		snprintf(fstate, 2*states_file_tpl.size(), states_file_tpl.c_str(), i+1);
+
+		if(labels_file_tpl != "") {
+			snprintf(flabel, 2*labels_file_tpl.size(), labels_file_tpl.c_str(), i+1);
+
+			if(get_states(vertices.at(i), string(fstate), string(flabel)) != 0) {
+				return 1;
+			}
+		}
+		else {
+			if(get_states(vertices.at(i), string(fstate)) != 0) {
+				return 1;
+			}
+		}
+
+		nvertices.at(i) = vertices.at(i).size();
+
+		delete[] fstate;
+		delete[] flabel;
+	}
+
+	LabelledState pr_state;
+
+	for(auto p = partitions.begin()+1; p != partitions.end(); ++p) {
+
+		if(p->at(0) > max_factor) {
+			continue;
+		}
+		
+		unsigned L = p->size();
+		unsigned N = 1;
+
+		vector<unsigned> nv (L);
+
+		// get total number of product states corresponding to that partition
+		for(unsigned i=0; i<L; i++) {
+			N *= nvertices.at( p->at(i)-1 );
+			nv.at(i) = nvertices.at( p->at(i)-1 );
+		}
+		
+		// build up all product states corresponding to tuples (i_1,...,i_L)
+		vector<unsigned> ind (L);
+
+		for(unsigned i=0; i<N; i++) {
+			get_multi_index(nv, i, ind);
+
+			pr_state = vertices.at( p->at(0)-1 ).at( ind.at(0) );
+
+			for(unsigned k=1; k<L; k++) {
+				pr_state = pr_product_state( pr_state, vertices.at( p->at(k)-1 ).at( ind.at(k) ) );
+			}
+
+			// check if state already exists in the list
+			// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than state
+			auto it = lower_bound(states.begin(), states.end(), pr_state);
+			if(it == states.end() || pr_state < *it) {
+				// element was not redundant, so also add it to the list
+				states.insert(it, pr_state);
+			}
+		}
+	}
+
+	return 0;
+}
+
+int symmetrised_product_states(unsigned n, vector<LabelledState> &states, string states_file_tpl, string labels_file_tpl="") {
+
+	//  get partitions of n
+	auto partitions = get_partitions(n);
+
+	// clear containers
+	states.clear();
+
+	// read vertices 
+	vector<vector<LabelledState>> vertices (n-1);
+	vector<unsigned> nvertices (n-1);
+
+	for(unsigned i=0; i<n-1; i++) {
+		char *fstate = new char [2*states_file_tpl.size()];
+		char *flabel = new char [2*labels_file_tpl.size()];
+
+		snprintf(fstate, 2*states_file_tpl.size(), states_file_tpl.c_str(), i+1);
+
+		if(labels_file_tpl != "") {
+			snprintf(flabel, 2*labels_file_tpl.size(), labels_file_tpl.c_str(), i+1);
+
+			if(get_states(vertices.at(i), string(fstate), string(flabel)) != 0) {
+				return 1;
+			}
+		}
+		else {
+			if(get_states(vertices.at(i), string(fstate)) != 0) {
+				return 1;
+			}
+		}
+
+		nvertices.at(i) = vertices.at(i).size();
+
+		delete[] fstate;
+		delete[] flabel;
+	}
+
+	LabelledState pr_state;
+
+	for(auto p = partitions.begin()+1; p != partitions.end(); ++p) {
+		
+		unsigned L = p->size();
+		unsigned N = 1;
+
+		vector<unsigned> nv (L);
+
+		// get total number of product states corresponding to that partition
+		for(unsigned i=0; i<L; i++) {
+			N *= nvertices.at( p->at(i)-1 );
+			nv.at(i) = nvertices.at( p->at(i)-1 );
+		}
+		
+		// build up all product states corresponding to tuples (i_1,...,i_L)
+		vector<unsigned> ind (L);
+
+		for(unsigned i=0; i<N; i++) {
+			get_multi_index(nv, i, ind);
+
+			pr_state = vertices.at( p->at(0)-1 ).at( ind.at(0) );
+
+			for(unsigned k=1; k<L; k++) {
+				pr_state = symmetrised_product_state( pr_state, vertices.at( p->at(k)-1 ).at( ind.at(k) ) );
+			}
+
+			// check if state already exists in the list
+			// to do that, we use binary search with std::lower_bound() which gives an iterator on the first element that is not less than state
+			auto it = lower_bound(states.begin(), states.end(), pr_state);
+			if(it == states.end() || pr_state < *it) {
+				// element was not redundant, so also add it to the list
+				states.insert(it, pr_state);
+			}
+		}
+	}
+
+	return 0;
+}
+
+// int product_states_recursive(unsigned n, vector<LabelledState> &states, string states_file_tpl, string labels_file_tpl="", unsigned max_factor=0) {
+
+// 	if(max_factor == 0) {
+// 		max_factor = n-1;
+// 	}
+
+// 	// read vertices 
+// 	vector<vector<LabelledState>> vertices (max_factor);
+// 	vector<unsigned> nvertices (max_factor);
+
+// 	for(unsigned i=0; i<max_factor; i++) {
+// 		char *fstate = new char [2*states_file_tpl.size()];
+// 		char *flabel = new char [2*labels_file_tpl.size()];
+
+// 		snprintf(fstate, 2*states_file_tpl.size(), states_file_tpl.c_str(), i+1);
+
+// 		if(labels_file_tpl != "") {
+// 			snprintf(flabel, 2*labels_file_tpl.size(), labels_file_tpl.c_str(), i+1);
+
+// 			if(get_states(vertices.at(i), string(fstate), string(flabel)) != 0) {
+// 				return 1;
+// 			}
+// 		}
+// 		else {
+// 			if(get_states(vertices.at(i), string(fstate)) != 0) {
+// 				return 1;
+// 			}
+// 		}
+
+// 		nvertices.at(i) = vertices.at(i).size();
+
+// 		delete[] fstate;
+// 		delete[] flabel;
+// 	}
+
+
+// 	return 0;
+// }
+
+// int product_states_recursive_worker(unsigned n, vector<LabelledState> &states, unsigned max_factor) {
+// 	// stop recursion
+// 	if(max_factor == 0) {
+// 		return 0;
+// 	}
+
+// 	// build up products
+// 	// i = number of tensor factors with max_factor qubits
+// 	vector<LabelledState> my_states;
+
+// 	product_states_recursive_worker(n, states, max_factor-1);
+
+// 	for(unsigned i=1; i<=n/max_factor; i++) {
+// 		product_states_recursive_worker(n-i*max_factor, my_states, max_factor-1);
+
+// 		auto partitions = get_partitions_w_permutations(i);
+// 		for(auto p : partitions) {
+// 			// build up product state 
+// 		}
+// 	}
+// }
+
+
 
 
 #endif

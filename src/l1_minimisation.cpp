@@ -23,14 +23,8 @@ int main(int argc, char** argv) {
 // ----- parse comand-line parameters
 // ----------------------------------
 
-string cmatrix_file;
-string outfile;
+string infile,outfile,state;
 bool Quiet;
-unsigned nqubits;
-bool project;
-
-
-int dimension; 
 
 try {
 
@@ -44,18 +38,19 @@ try {
 	TCLAP::ValueArg<string> output_arg ("o", "outfile", "Name that will be used for output files", false, "solution.dat", "string");
 	cmd.add(output_arg);
 
-
 	TCLAP::SwitchArg Quiet_arg ("Q","Quiet","Suppress detailed output to files", cmd, false);
 
-	TCLAP::ValueArg<bool> project_arg ("p","project", "Boolean variable which decides whether to project the states or not.", false, true, "Bool");
-	cmd.add(project_arg);
+	vector<string> allowed_states = { "T", "H" };
+	TCLAP::ValuesConstraint<string> state_con ( allowed_states );
+	TCLAP::ValueArg<string> state_arg ("s", "state", "Which state to use: Either H or T", true, "H", &state_con);
+	cmd.add(state_arg);
 
 	cmd.parse(argc, argv);
 
-	cmatrix_file = input_arg.getValue();
+	infile = input_arg.getValue();
 	outfile = output_arg.getValue();
 	Quiet = Quiet_arg.getValue();
-	project = project_arg.getValue();
+	state = state_arg.getValue();
 
 } catch (TCLAP::ArgException &e) { 
 	cerr << "Error: " << e.error() << " for arg " << e.argId() << endl; 
@@ -65,7 +60,45 @@ try {
 // ----- prepare computation
 // ----------------------------------
 
-GLPKL1Minimisation lp (cmatrix_file);
+
+cout << "#-------------------------------------------------" << endl;
+cout << "# l1-minimisation over projected stabiliser states" << endl;
+cout << "# for tensor powers of the " << state << " state" << endl;
+cout << "#-------------------------------------------------" << endl;
+
+
+
+// write program call to stdout
+cout << endl;
+cout << "# Program call" << endl;
+cout << "#-------------" << endl;
+cout << "   ";
+for(unsigned i=0; i<argc; i++) {
+	cout << argv[i] << " ";
+}
+cout << endl << endl;
+
+
+// read states
+vector<LabelledState> states;
+
+cout << endl;
+cout << "# Read states from file" << endl;
+cout << "#----------------------" << endl;
+cout << endl;
+
+// test for already exisiting file
+if(get_states(states, infile+".mat", infile+".lab") == 0) {
+	cout << "   Read " << states.size() << " states." << endl;
+}
+else {
+	cout << "   Failed." << endl;
+}
+
+unsigned nqubits = states.at(0).size();
+
+// cout << nqubits << endl;
+GLPKL1Minimisation lp (states);
 lp.set_verbosity(3);
 lp.print_parameters();
 
@@ -76,22 +109,17 @@ lp.print_parameters();
 
 // solve & write solution
 vector<double> y;
-if(project == true) {
-	nqubits = lp.get_dimension();
+if(state == "H") {
 	y = H_state_nb(nqubits);
 }
 else {
-	nqubits = (unsigned)(log(lp.get_dimension())/log(4));
-	y = H_state(nqubits);
+	y = T_state_nb(nqubits);
 }
 
 int ret_status = lp.check_point(y);
 double ROM = lp.get_obj_value();
 
-
-
-cout << "ROM(H^" << nqubits << ") = " << scientific << ROM << endl;
-
+cout << "ROM(" << state << "^" << nqubits << ") = " << scientific << ROM << endl;
 
 // write solution
 lp.write_glpk_output(outfile);

@@ -74,10 +74,10 @@ int main(int argc, char** argv) {
 	cout << "===   Start testing of partitions" << endl;
 	cout << "=================================================" << endl;
 
-	N = 8;
+	N = 5;
 	cout << "All partitions for n = " << N << endl;
 
-	vector<vector<unsigned>> parts = get_partitions(N);
+	vector<vector<unsigned>> parts = get_partitions_w_permutations(N,2);
 	for(auto p : parts) {
 		for(auto i : p) {
 			cout << i << " ";

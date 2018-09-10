@@ -32,16 +32,16 @@ public:
 	// abstract methods
 
 	// reading & allocation method
-	virtual int read_vertex_matrix(string cmatrix_file) = 0; 
+	virtual int read_vertex_matrix(const string cmatrix_file) = 0; 
 
 	// single point checking method
-	virtual int check_point(vector<double> &y) = 0;
+	virtual int check_point(const vector<double> &y) = 0;
 
 	// given a 1-parameter family of points, y(p), compute the threshold value p = p_th for which the curve of points intersects the polytope and returns it
-	virtual double check_family(PointGenerator &y) = 0;
+	virtual double check_family(const PointGenerator &y) = 0;
 
 	// write solution to outfile
-	virtual void write_sol(string outfile) = 0;
+	virtual void write_sol(const string outfile) = 0;
 
 	virtual double get_obj_value() = 0;
 

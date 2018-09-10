@@ -11,14 +11,14 @@ using namespace std;
 
 class PointGenerator {
 public:
-	virtual vector<double> operator() (double p) = 0;
+	virtual vector<double> operator() (double p) const = 0;
 };
 
 class PSDistributionGenerator {
 protected:
 	unsigned _length;
 public:
-	virtual vector<double> operator() (double p) = 0;
+	virtual vector<double> operator() (double p) const = 0;
 
 	unsigned get_length() {
 		return _length;

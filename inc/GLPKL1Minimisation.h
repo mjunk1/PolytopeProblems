@@ -39,6 +39,9 @@ protected:
 	int _glp_ret = 0;
 	string _method = "simplex";
 
+	// optional vector of strings that identify the vertices 
+	vector<string> _labels;
+
 	// output
 	unsigned _verbose = 2;
 
@@ -140,6 +143,8 @@ protected:
 		}
 		glp_set_mat_row(_lp, _dim+2*nvertices+1, nvertices, ind.data(), val.data());
 
+		// set some empty labels
+		_labels.assign(nvertices, "");
 	}
 
 public:
@@ -159,16 +164,33 @@ public:
 
 	}
 
-	// GLPKL1Minimisation(SparseMatrix<double,RowMajor>& vertex_matrix) {
-	// 	// reading vertex coordinates and parameters
-	// 	if(read_vertex_matrix(vertex_matrix) != 0) {
-	// 		exit (EXIT_FAILURE);
-	// 	}
+	GLPKL1Minimisation(vector<vector<int>>& cmatrix) {
+		// reading vertex coordinates and parameters
+		if(read_vertex_matrix(cmatrix) != 0) {
+			exit (EXIT_FAILURE);
+		}
 
-	// 	// setting parameter struct to default values
-	// 	glp_init_smcp(&_parm);
+		// setting parameter struct to default values
+		glp_init_smcp(&_parm);
 
-	// }
+	}
+
+	GLPKL1Minimisation(vector<LabelledState>& cmatrix) {
+		// reading vertex coordinates and parameters
+		if(read_vertex_matrix(cmatrix) != 0) {
+			exit (EXIT_FAILURE);
+		}
+
+		// setting parameter struct to default values
+		glp_init_smcp(&_parm);
+
+		// setting labels
+		for(unsigned i=0; i<get_nvertices(); i++) {
+			_labels.at(i) = cmatrix.at(i).label;
+		}
+
+	}
+
 
 	// Destructor
 	~GLPKL1Minimisation() {
@@ -182,11 +204,17 @@ public:
 		return 0;
 	}
 
-	// int read_vertex_matrix(SparseMatrix<double,RowMajor>& vertex_matrix) {
-	// 	GLPKFormat data = to_GLPK_format(vertex_matrix, true);
-	// 	update_problem(data);
-	// 	return 0;
-	// }
+	int read_vertex_matrix(vector<vector<int>>& cmatrix) {
+		GLPKFormat data = to_GLPK_format(cmatrix, true);
+		update_problem(data);
+		return 0;
+	}
+
+	int read_vertex_matrix(vector<LabelledState>& cmatrix) {
+		GLPKFormat data = to_GLPK_format(cmatrix, true);
+		update_problem(data);
+		return 0;
+	}
 
 
 	// operations
